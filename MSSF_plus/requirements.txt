@@ -1,0 +1,8 @@
+# MSSF_plus — project dependencies (policy: only numpy/scipy/scikit-learn/torch).
+# Local:  python3.12 -m venv MSSF_plus/.venv && MSSF_plus/.venv/bin/pip install -r MSSF_plus/requirements.txt
+# Colab:  pip install -r MSSF_plus/requirements.txt   (torch is preinstalled on Colab; pip keeps it if compatible)
+# Exact versions used for each run are frozen into MSSF_plus/requirements-lock.txt and recorded in config.json.
+numpy>=1.26,<3
+scipy>=1.11
+scikit-learn>=1.4
+torch>=2.2

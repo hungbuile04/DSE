@@ -1,0 +1,1126 @@
+{
+  "global": {
+    "total_positive_pairs": 37071,
+    "counts_class_0_to_4": [
+      1190,
+      4186,
+      9978,
+      17594,
+      4123
+    ],
+    "pcts_class_0_to_4": [
+      3.21,
+      11.292,
+      26.916,
+      47.46,
+      11.122
+    ],
+    "max_to_min_ratio": 14.785,
+    "inv_freq_weights_norm": [
+      6.2304,
+      1.7712,
+      0.7431,
+      0.4214,
+      1.7983
+    ],
+    "matrix_shape": [
+      750,
+      994
+    ],
+    "total_cells": 745500,
+    "unobserved_zero_cells": 708429,
+    "positive_density_pct": 4.973
+  },
+  "split_A": {
+    "0": {
+      "train": {
+        "total_positive_pairs": 33363,
+        "counts_class_0_to_4": [
+          1071,
+          3767,
+          8980,
+          15834,
+          3711
+        ],
+        "pcts_class_0_to_4": [
+          3.21,
+          11.291,
+          26.916,
+          47.46,
+          11.123
+        ],
+        "max_to_min_ratio": 14.784,
+        "inv_freq_weights_norm": [
+          6.2303,
+          1.7713,
+          0.7431,
+          0.4214,
+          1.7981
+        ]
+      },
+      "test": {
+        "total_positive_pairs": 3708,
+        "counts_class_0_to_4": [
+          119,
+          419,
+          998,
+          1760,
+          412
+        ],
+        "pcts_class_0_to_4": [
+          3.209,
+          11.3,
+          26.915,
+          47.465,
+          11.111
+        ],
+        "max_to_min_ratio": 14.79,
+        "inv_freq_weights_norm": [
+          6.2319,
+          1.7699,
+          0.7431,
+          0.4214,
+          1.8
+        ]
+      }
+    },
+    "1": {
+      "train": {
+        "total_positive_pairs": 33364,
+        "counts_class_0_to_4": [
+          1071,
+          3768,
+          8980,
+          15834,
+          3711
+        ],
+        "pcts_class_0_to_4": [
+          3.21,
+          11.294,
+          26.915,
+          47.458,
+          11.123
+        ],
+        "max_to_min_ratio": 14.784,
+        "inv_freq_weights_norm": [
+          6.2304,
+          1.7709,
+          0.7431,
+          0.4214,
+          1.7981
+        ]
+      },
+      "test": {
+        "total_positive_pairs": 3707,
+        "counts_class_0_to_4": [
+          119,
+          418,
+          998,
+          1760,
+          412
+        ],
+        "pcts_class_0_to_4": [
+          3.21,
+          11.276,
+          26.922,
+          47.478,
+          11.114
+        ],
+        "max_to_min_ratio": 14.79,
+        "inv_freq_weights_norm": [
+          6.2303,
+          1.7737,
+          0.7429,
+          0.4212,
+          1.7995
+        ]
+      }
+    },
+    "2": {
+      "train": {
+        "total_positive_pairs": 33364,
+        "counts_class_0_to_4": [
+          1071,
+          3768,
+          8980,
+          15834,
+          3711
+        ],
+        "pcts_class_0_to_4": [
+          3.21,
+          11.294,
+          26.915,
+          47.458,
+          11.123
+        ],
+        "max_to_min_ratio": 14.784,
+        "inv_freq_weights_norm": [
+          6.2304,
+          1.7709,
+          0.7431,
+          0.4214,
+          1.7981
+        ]
+      },
+      "test": {
+        "total_positive_pairs": 3707,
+        "counts_class_0_to_4": [
+          119,
+          418,
+          998,
+          1760,
+          412
+        ],
+        "pcts_class_0_to_4": [
+          3.21,
+          11.276,
+          26.922,
+          47.478,
+          11.114
+        ],
+        "max_to_min_ratio": 14.79,
+        "inv_freq_weights_norm": [
+          6.2303,
+          1.7737,
+          0.7429,
+          0.4212,
+          1.7995
+        ]
+      }
+    },
+    "3": {
+      "train": {
+        "total_positive_pairs": 33364,
+        "counts_class_0_to_4": [
+          1071,
+          3768,
+          8980,
+          15834,
+          3711
+        ],
+        "pcts_class_0_to_4": [
+          3.21,
+          11.294,
+          26.915,
+          47.458,
+          11.123
+        ],
+        "max_to_min_ratio": 14.784,
+        "inv_freq_weights_norm": [
+          6.2304,
+          1.7709,
+          0.7431,
+          0.4214,
+          1.7981
+        ]
+      },
+      "test": {
+        "total_positive_pairs": 3707,
+        "counts_class_0_to_4": [
+          119,
+          418,
+          998,
+          1760,
+          412
+        ],
+        "pcts_class_0_to_4": [
+          3.21,
+          11.276,
+          26.922,
+          47.478,
+          11.114
+        ],
+        "max_to_min_ratio": 14.79,
+        "inv_freq_weights_norm": [
+          6.2303,
+          1.7737,
+          0.7429,
+          0.4212,
+          1.7995
+        ]
+      }
+    },
+    "4": {
+      "train": {
+        "total_positive_pairs": 33364,
+        "counts_class_0_to_4": [
+          1071,
+          3768,
+          8980,
+          15835,
+          3710
+        ],
+        "pcts_class_0_to_4": [
+          3.21,
+          11.294,
+          26.915,
+          47.461,
+          11.12
+        ],
+        "max_to_min_ratio": 14.785,
+        "inv_freq_weights_norm": [
+          6.2304,
+          1.7709,
+          0.7431,
+          0.4214,
+          1.7986
+        ]
+      },
+      "test": {
+        "total_positive_pairs": 3707,
+        "counts_class_0_to_4": [
+          119,
+          418,
+          998,
+          1759,
+          413
+        ],
+        "pcts_class_0_to_4": [
+          3.21,
+          11.276,
+          26.922,
+          47.451,
+          11.141
+        ],
+        "max_to_min_ratio": 14.782,
+        "inv_freq_weights_norm": [
+          6.2303,
+          1.7737,
+          0.7429,
+          0.4215,
+          1.7952
+        ]
+      }
+    },
+    "5": {
+      "train": {
+        "total_positive_pairs": 33364,
+        "counts_class_0_to_4": [
+          1071,
+          3767,
+          8981,
+          15835,
+          3710
+        ],
+        "pcts_class_0_to_4": [
+          3.21,
+          11.291,
+          26.918,
+          47.461,
+          11.12
+        ],
+        "max_to_min_ratio": 14.785,
+        "inv_freq_weights_norm": [
+          6.2304,
+          1.7714,
+          0.743,
+          0.4214,
+          1.7986
+        ]
+      },
+      "test": {
+        "total_positive_pairs": 3707,
+        "counts_class_0_to_4": [
+          119,
+          419,
+          997,
+          1759,
+          413
+        ],
+        "pcts_class_0_to_4": [
+          3.21,
+          11.303,
+          26.895,
+          47.451,
+          11.141
+        ],
+        "max_to_min_ratio": 14.782,
+        "inv_freq_weights_norm": [
+          6.2303,
+          1.7695,
+          0.7436,
+          0.4215,
+          1.7952
+        ]
+      }
+    },
+    "6": {
+      "train": {
+        "total_positive_pairs": 33364,
+        "counts_class_0_to_4": [
+          1071,
+          3767,
+          8981,
+          15835,
+          3710
+        ],
+        "pcts_class_0_to_4": [
+          3.21,
+          11.291,
+          26.918,
+          47.461,
+          11.12
+        ],
+        "max_to_min_ratio": 14.785,
+        "inv_freq_weights_norm": [
+          6.2304,
+          1.7714,
+          0.743,
+          0.4214,
+          1.7986
+        ]
+      },
+      "test": {
+        "total_positive_pairs": 3707,
+        "counts_class_0_to_4": [
+          119,
+          419,
+          997,
+          1759,
+          413
+        ],
+        "pcts_class_0_to_4": [
+          3.21,
+          11.303,
+          26.895,
+          47.451,
+          11.141
+        ],
+        "max_to_min_ratio": 14.782,
+        "inv_freq_weights_norm": [
+          6.2303,
+          1.7695,
+          0.7436,
+          0.4215,
+          1.7952
+        ]
+      }
+    },
+    "7": {
+      "train": {
+        "total_positive_pairs": 33364,
+        "counts_class_0_to_4": [
+          1071,
+          3767,
+          8980,
+          15835,
+          3711
+        ],
+        "pcts_class_0_to_4": [
+          3.21,
+          11.291,
+          26.915,
+          47.461,
+          11.123
+        ],
+        "max_to_min_ratio": 14.785,
+        "inv_freq_weights_norm": [
+          6.2304,
+          1.7714,
+          0.7431,
+          0.4214,
+          1.7981
+        ]
+      },
+      "test": {
+        "total_positive_pairs": 3707,
+        "counts_class_0_to_4": [
+          119,
+          419,
+          998,
+          1759,
+          412
+        ],
+        "pcts_class_0_to_4": [
+          3.21,
+          11.303,
+          26.922,
+          47.451,
+          11.114
+        ],
+        "max_to_min_ratio": 14.782,
+        "inv_freq_weights_norm": [
+          6.2303,
+          1.7695,
+          0.7429,
+          0.4215,
+          1.7995
+        ]
+      }
+    },
+    "8": {
+      "train": {
+        "total_positive_pairs": 33364,
+        "counts_class_0_to_4": [
+          1071,
+          3767,
+          8980,
+          15835,
+          3711
+        ],
+        "pcts_class_0_to_4": [
+          3.21,
+          11.291,
+          26.915,
+          47.461,
+          11.123
+        ],
+        "max_to_min_ratio": 14.785,
+        "inv_freq_weights_norm": [
+          6.2304,
+          1.7714,
+          0.7431,
+          0.4214,
+          1.7981
+        ]
+      },
+      "test": {
+        "total_positive_pairs": 3707,
+        "counts_class_0_to_4": [
+          119,
+          419,
+          998,
+          1759,
+          412
+        ],
+        "pcts_class_0_to_4": [
+          3.21,
+          11.303,
+          26.922,
+          47.451,
+          11.114
+        ],
+        "max_to_min_ratio": 14.782,
+        "inv_freq_weights_norm": [
+          6.2303,
+          1.7695,
+          0.7429,
+          0.4215,
+          1.7995
+        ]
+      }
+    },
+    "9": {
+      "train": {
+        "total_positive_pairs": 33364,
+        "counts_class_0_to_4": [
+          1071,
+          3767,
+          8980,
+          15835,
+          3711
+        ],
+        "pcts_class_0_to_4": [
+          3.21,
+          11.291,
+          26.915,
+          47.461,
+          11.123
+        ],
+        "max_to_min_ratio": 14.785,
+        "inv_freq_weights_norm": [
+          6.2304,
+          1.7714,
+          0.7431,
+          0.4214,
+          1.7981
+        ]
+      },
+      "test": {
+        "total_positive_pairs": 3707,
+        "counts_class_0_to_4": [
+          119,
+          419,
+          998,
+          1759,
+          412
+        ],
+        "pcts_class_0_to_4": [
+          3.21,
+          11.303,
+          26.922,
+          47.451,
+          11.114
+        ],
+        "max_to_min_ratio": 14.782,
+        "inv_freq_weights_norm": [
+          6.2303,
+          1.7695,
+          0.7429,
+          0.4215,
+          1.7995
+        ]
+      }
+    }
+  },
+  "split_B": {
+    "0": {
+      "train": {
+        "total_positive_pairs": 33602,
+        "counts_class_0_to_4": [
+          1092,
+          3944,
+          8949,
+          15911,
+          3706
+        ],
+        "pcts_class_0_to_4": [
+          3.25,
+          11.737,
+          26.632,
+          47.351,
+          11.029
+        ],
+        "max_to_min_ratio": 14.571,
+        "inv_freq_weights_norm": [
+          6.1542,
+          1.704,
+          0.751,
+          0.4224,
+          1.8134
+        ]
+      },
+      "test": {
+        "total_positive_pairs": 3469,
+        "counts_class_0_to_4": [
+          98,
+          242,
+          1029,
+          1683,
+          417
+        ],
+        "pcts_class_0_to_4": [
+          2.825,
+          6.976,
+          29.663,
+          48.515,
+          12.021
+        ],
+        "max_to_min_ratio": 17.173,
+        "inv_freq_weights_norm": [
+          7.0796,
+          2.8669,
+          0.6742,
+          0.4122,
+          1.6638
+        ]
+      },
+      "n_test_drugs": 75,
+      "n_train_drugs": 675
+    },
+    "1": {
+      "train": {
+        "total_positive_pairs": 33221,
+        "counts_class_0_to_4": [
+          1070,
+          3842,
+          8896,
+          15638,
+          3775
+        ],
+        "pcts_class_0_to_4": [
+          3.221,
+          11.565,
+          26.778,
+          47.073,
+          11.363
+        ],
+        "max_to_min_ratio": 14.615,
+        "inv_freq_weights_norm": [
+          6.2095,
+          1.7294,
+          0.7469,
+          0.4249,
+          1.7601
+        ]
+      },
+      "test": {
+        "total_positive_pairs": 3850,
+        "counts_class_0_to_4": [
+          120,
+          344,
+          1082,
+          1956,
+          348
+        ],
+        "pcts_class_0_to_4": [
+          3.117,
+          8.935,
+          28.104,
+          50.805,
+          9.039
+        ],
+        "max_to_min_ratio": 16.3,
+        "inv_freq_weights_norm": [
+          6.4167,
+          2.2384,
+          0.7116,
+          0.3937,
+          2.2126
+        ]
+      },
+      "n_test_drugs": 75,
+      "n_train_drugs": 675
+    },
+    "2": {
+      "train": {
+        "total_positive_pairs": 33569,
+        "counts_class_0_to_4": [
+          1088,
+          3901,
+          9059,
+          15807,
+          3714
+        ],
+        "pcts_class_0_to_4": [
+          3.241,
+          11.621,
+          26.986,
+          47.088,
+          11.064
+        ],
+        "max_to_min_ratio": 14.528,
+        "inv_freq_weights_norm": [
+          6.1708,
+          1.721,
+          0.7411,
+          0.4247,
+          1.8077
+        ]
+      },
+      "test": {
+        "total_positive_pairs": 3502,
+        "counts_class_0_to_4": [
+          102,
+          285,
+          919,
+          1787,
+          409
+        ],
+        "pcts_class_0_to_4": [
+          2.913,
+          8.138,
+          26.242,
+          51.028,
+          11.679
+        ],
+        "max_to_min_ratio": 17.52,
+        "inv_freq_weights_norm": [
+          6.8667,
+          2.4575,
+          0.7621,
+          0.3919,
+          1.7125
+        ]
+      },
+      "n_test_drugs": 75,
+      "n_train_drugs": 675
+    },
+    "3": {
+      "train": {
+        "total_positive_pairs": 33361,
+        "counts_class_0_to_4": [
+          1052,
+          3796,
+          9011,
+          15810,
+          3692
+        ],
+        "pcts_class_0_to_4": [
+          3.153,
+          11.379,
+          27.011,
+          47.391,
+          11.067
+        ],
+        "max_to_min_ratio": 15.029,
+        "inv_freq_weights_norm": [
+          6.3424,
+          1.7577,
+          0.7405,
+          0.422,
+          1.8072
+        ]
+      },
+      "test": {
+        "total_positive_pairs": 3710,
+        "counts_class_0_to_4": [
+          138,
+          390,
+          967,
+          1784,
+          431
+        ],
+        "pcts_class_0_to_4": [
+          3.72,
+          10.512,
+          26.065,
+          48.086,
+          11.617
+        ],
+        "max_to_min_ratio": 12.928,
+        "inv_freq_weights_norm": [
+          5.3768,
+          1.9026,
+          0.7673,
+          0.4159,
+          1.7216
+        ]
+      },
+      "n_test_drugs": 75,
+      "n_train_drugs": 675
+    },
+    "4": {
+      "train": {
+        "total_positive_pairs": 33290,
+        "counts_class_0_to_4": [
+          1051,
+          3588,
+          9012,
+          15882,
+          3757
+        ],
+        "pcts_class_0_to_4": [
+          3.157,
+          10.778,
+          27.071,
+          47.708,
+          11.286
+        ],
+        "max_to_min_ratio": 15.111,
+        "inv_freq_weights_norm": [
+          6.3349,
+          1.8556,
+          0.7388,
+          0.4192,
+          1.7722
+        ]
+      },
+      "test": {
+        "total_positive_pairs": 3781,
+        "counts_class_0_to_4": [
+          139,
+          598,
+          966,
+          1712,
+          366
+        ],
+        "pcts_class_0_to_4": [
+          3.676,
+          15.816,
+          25.549,
+          45.279,
+          9.68
+        ],
+        "max_to_min_ratio": 12.317,
+        "inv_freq_weights_norm": [
+          5.4403,
+          1.2645,
+          0.7828,
+          0.4417,
+          2.0661
+        ]
+      },
+      "n_test_drugs": 75,
+      "n_train_drugs": 675
+    },
+    "5": {
+      "train": {
+        "total_positive_pairs": 32906,
+        "counts_class_0_to_4": [
+          1013,
+          3501,
+          8856,
+          15880,
+          3656
+        ],
+        "pcts_class_0_to_4": [
+          3.078,
+          10.639,
+          26.913,
+          48.259,
+          11.11
+        ],
+        "max_to_min_ratio": 15.676,
+        "inv_freq_weights_norm": [
+          6.4967,
+          1.8798,
+          0.7431,
+          0.4144,
+          1.8001
+        ]
+      },
+      "test": {
+        "total_positive_pairs": 4165,
+        "counts_class_0_to_4": [
+          177,
+          685,
+          1122,
+          1714,
+          467
+        ],
+        "pcts_class_0_to_4": [
+          4.25,
+          16.447,
+          26.939,
+          41.152,
+          11.212
+        ],
+        "max_to_min_ratio": 9.684,
+        "inv_freq_weights_norm": [
+          4.7062,
+          1.2161,
+          0.7424,
+          0.486,
+          1.7837
+        ]
+      },
+      "n_test_drugs": 75,
+      "n_train_drugs": 675
+    },
+    "6": {
+      "train": {
+        "total_positive_pairs": 33046,
+        "counts_class_0_to_4": [
+          1069,
+          3951,
+          8753,
+          15687,
+          3586
+        ],
+        "pcts_class_0_to_4": [
+          3.235,
+          11.956,
+          26.487,
+          47.47,
+          10.852
+        ],
+        "max_to_min_ratio": 14.674,
+        "inv_freq_weights_norm": [
+          6.1826,
+          1.6728,
+          0.7551,
+          0.4213,
+          1.8431
+        ]
+      },
+      "test": {
+        "total_positive_pairs": 4025,
+        "counts_class_0_to_4": [
+          121,
+          235,
+          1225,
+          1907,
+          537
+        ],
+        "pcts_class_0_to_4": [
+          3.006,
+          5.839,
+          30.435,
+          47.379,
+          13.342
+        ],
+        "max_to_min_ratio": 15.76,
+        "inv_freq_weights_norm": [
+          6.6529,
+          3.4255,
+          0.6571,
+          0.4221,
+          1.4991
+        ]
+      },
+      "n_test_drugs": 75,
+      "n_train_drugs": 675
+    },
+    "7": {
+      "train": {
+        "total_positive_pairs": 33797,
+        "counts_class_0_to_4": [
+          1084,
+          3936,
+          9174,
+          15826,
+          3777
+        ],
+        "pcts_class_0_to_4": [
+          3.207,
+          11.646,
+          27.144,
+          46.827,
+          11.176
+        ],
+        "max_to_min_ratio": 14.6,
+        "inv_freq_weights_norm": [
+          6.2356,
+          1.7173,
+          0.7368,
+          0.4271,
+          1.7896
+        ]
+      },
+      "test": {
+        "total_positive_pairs": 3274,
+        "counts_class_0_to_4": [
+          106,
+          250,
+          804,
+          1768,
+          346
+        ],
+        "pcts_class_0_to_4": [
+          3.238,
+          7.636,
+          24.557,
+          54.001,
+          10.568
+        ],
+        "max_to_min_ratio": 16.679,
+        "inv_freq_weights_norm": [
+          6.1774,
+          2.6192,
+          0.8144,
+          0.3704,
+          1.8925
+        ]
+      },
+      "n_test_drugs": 75,
+      "n_train_drugs": 675
+    },
+    "8": {
+      "train": {
+        "total_positive_pairs": 33805,
+        "counts_class_0_to_4": [
+          1135,
+          3674,
+          9174,
+          16073,
+          3749
+        ],
+        "pcts_class_0_to_4": [
+          3.357,
+          10.868,
+          27.138,
+          47.546,
+          11.09
+        ],
+        "max_to_min_ratio": 14.161,
+        "inv_freq_weights_norm": [
+          5.9568,
+          1.8402,
+          0.737,
+          0.4206,
+          1.8034
+        ]
+      },
+      "test": {
+        "total_positive_pairs": 3266,
+        "counts_class_0_to_4": [
+          55,
+          512,
+          804,
+          1521,
+          374
+        ],
+        "pcts_class_0_to_4": [
+          1.684,
+          15.677,
+          24.617,
+          46.571,
+          11.451
+        ],
+        "max_to_min_ratio": 27.655,
+        "inv_freq_weights_norm": [
+          11.8764,
+          1.2758,
+          0.8124,
+          0.4295,
+          1.7465
+        ]
+      },
+      "n_test_drugs": 75,
+      "n_train_drugs": 675
+    },
+    "9": {
+      "train": {
+        "total_positive_pairs": 33042,
+        "counts_class_0_to_4": [
+          1056,
+          3541,
+          8918,
+          15832,
+          3695
+        ],
+        "pcts_class_0_to_4": [
+          3.196,
+          10.717,
+          26.99,
+          47.915,
+          11.183
+        ],
+        "max_to_min_ratio": 14.992,
+        "inv_freq_weights_norm": [
+          6.258,
+          1.8663,
+          0.741,
+          0.4174,
+          1.7885
+        ]
+      },
+      "test": {
+        "total_positive_pairs": 4029,
+        "counts_class_0_to_4": [
+          134,
+          645,
+          1060,
+          1762,
+          428
+        ],
+        "pcts_class_0_to_4": [
+          3.326,
+          16.009,
+          26.309,
+          43.733,
+          10.623
+        ],
+        "max_to_min_ratio": 13.149,
+        "inv_freq_weights_norm": [
+          6.0134,
+          1.2493,
+          0.7602,
+          0.4573,
+          1.8827
+        ]
+      },
+      "n_test_drugs": 75,
+      "n_train_drugs": 675
+    }
+  },
+  "split_A_test_pct_mean": [
+    3.21,
+    11.292,
+    26.916,
+    47.461,
+    11.122
+  ],
+  "split_A_test_pct_std": [
+    0.0,
+    0.013,
+    0.011,
+    0.012,
+    0.013
+  ],
+  "split_B_test_pct_mean": [
+    3.176,
+    11.198,
+    26.848,
+    47.655,
+    11.123
+  ],
+  "split_B_test_pct_std": [
+    0.646,
+    4.078,
+    1.886,
+    3.565,
+    1.157
+  ]
+}

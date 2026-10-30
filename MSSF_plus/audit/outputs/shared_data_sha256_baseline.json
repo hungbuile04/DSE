@@ -1,0 +1,369 @@
+{
+  "n_files": 91,
+  "files": {
+    "README.md": {
+      "sha256": "8c390db6fd3097396de884528c98262d337f4703a18f82857eaa2e5bd2848ec8",
+      "size_bytes": 8651
+    },
+    "drug_SMILES_750.csv": {
+      "sha256": "0e66327fbfe4ce7de6a60187d9bacfd91adc81ea6dd8873cb3d82f2aff1204dd",
+      "size_bytes": 64109
+    },
+    "drug_side.pkl": {
+      "sha256": "cfa3a98f878a1775989f86d93665514794b019a4282802e161541cd924693b48",
+      "size_bytes": 5964162
+    },
+    "effect_side_semantic.pkl": {
+      "sha256": "fb3ed5d0e48554cca4229f7ec5b246802f5d9399e326b5df49158ea1f545b77d",
+      "size_bytes": 7904450
+    },
+    "generate_splits.py": {
+      "sha256": "5196a0b299d658ed0457961f91ec8e8f1a8887db6d6663cadfa5e4985946a0ed",
+      "size_bytes": 6479
+    },
+    "glove_wordEmbedding.pkl": {
+      "sha256": "f1cd6277e600f2b253f25b77ee91c28237058f5e99e2fd6a524bc2d3e31f1364",
+      "size_bytes": 2385765
+    },
+    "mask_mat_750.mat": {
+      "sha256": "3f982a5768c04d97248f254c9556176459dcc8b6636ac6b8f41bdbb931640722",
+      "size_bytes": 59640768
+    },
+    "prepare_all_data.py": {
+      "sha256": "dfe8e1ec0c0711b00008ac70eaf293b7c737d82a2b3c31383214b86705fceeaf",
+      "size_bytes": 13547
+    },
+    "raw_frequency_750.mat": {
+      "sha256": "f07927798f0b68c590ef5211ba7bbc7ac07678304c3d1cef40a79a522822644a",
+      "size_bytes": 6093000
+    },
+    "side_effect_label_750.mat": {
+      "sha256": "9c484ae159507aa6e82716835ad04550d49cdf6669eb16929f7a3df5826377c9",
+      "size_bytes": 1041176
+    },
+    "split_adapter.py": {
+      "sha256": "826d91226801c022aa2f20c84499f8d95a897e3157ce437d30f0585b1b981726",
+      "size_bytes": 6945
+    },
+    "unified_eval.py": {
+      "sha256": "67e30348ef6aa241374115f922cea68cde9135877a9afdd15fee788f6acc0268",
+      "size_bytes": 15979
+    },
+    "mssf_750/Text_similarity_five.pkl": {
+      "sha256": "c6831693b92b524077d11ff742f71fbe7f6e6078a7cebe061fdd9538ec83ac94",
+      "size_bytes": 4500139
+    },
+    "mssf_750/Text_similarity_four.pkl": {
+      "sha256": "0836af52faf2c66903b532c67165b520aaf6262237e33da545da56befd81100e",
+      "size_bytes": 4500139
+    },
+    "mssf_750/Text_similarity_one.pkl": {
+      "sha256": "983cfba362d6a0dd67595bfc86f7a3dcec037c2bff262065213a70b7aeb3333a",
+      "size_bytes": 4500139
+    },
+    "mssf_750/Text_similarity_three.pkl": {
+      "sha256": "f26c12611a714861b3d72764cd5f31fa6b9c45d7d03fc1b61fb7fa455357a8c4",
+      "size_bytes": 4500139
+    },
+    "mssf_750/Text_similarity_two.pkl": {
+      "sha256": "f20819b39dd1b81a98af7ef2e3761a93ca57828ba8e8dbc9b974e0b5dd2fa0d5",
+      "size_bytes": 4500139
+    },
+    "mssf_750/drug_mol.pkl": {
+      "sha256": "61c955e75dad9f840c891ac355a70ae9df67fe1d54b94c023af5332ce16a7e83",
+      "size_bytes": 600138
+    },
+    "mssf_750/drug_pathway_enzyme_similarity.pkl": {
+      "sha256": "9a131ffcf1982ff633e0e09c7997351a380c2fa2aa51691dcb41f02439baf804",
+      "size_bytes": 4500139
+    },
+    "mssf_750/drug_side.pkl": {
+      "sha256": "0c4d15614502856bdd940f69d860d171193b0e2946376419a701fb7d6f5f85c5",
+      "size_bytes": 5964139
+    },
+    "mssf_750/drug_target.pkl": {
+      "sha256": "18925bdbfe9b3939d9c61f866c25097547a3f0ddd271377673b5e21059b12324",
+      "size_bytes": 5082139
+    },
+    "mssf_750/fingerprint_similarity.pkl": {
+      "sha256": "a92c67aa78205645eb3b9a2ca955bdab9ab17d9bdb825dc38f969bd62b92407d",
+      "size_bytes": 4500139
+    },
+    "mssf_750/glove_wordEmbedding.pkl": {
+      "sha256": "38f0b921881b12ff03366fccf8f96b0e7c5b361f7d9d7fe3eafc4669d9453193",
+      "size_bytes": 2385739
+    },
+    "mssf_750/side_effect_semantic.pkl": {
+      "sha256": "f8f5f61075200b134ab9358f6079c5cf47ae2aa4ee318b5cb063d92137152b1d",
+      "size_bytes": 7904427
+    },
+    "mvsl_750_994/col_mapping_893_to_994.npy": {
+      "sha256": "6d180e8eca8da035649af05b6db3fe646290acabac58e5d0d2aa86cbd32af62b",
+      "size_bytes": 7272
+    },
+    "mvsl_750_994/drug_side_association_matrix.pkl": {
+      "sha256": "232a5ae1f1be29919ba3deb99a268a22001331fc4c5d0319668759074a986683",
+      "size_bytes": 2982139
+    },
+    "mvsl_750_994/drug_side_frequency_matrix.pkl": {
+      "sha256": "0c4d15614502856bdd940f69d860d171193b0e2946376419a701fb7d6f5f85c5",
+      "size_bytes": 5964139
+    },
+    "mvsl_750_994/drug_smiles.pkl": {
+      "sha256": "eafea2d82f1aa734e83a074a6c242e9b5f85df54be96667c0f83afba959e3b16",
+      "size_bytes": 69800
+    },
+    "mvsl_750_994/final_sample.pkl": {
+      "sha256": "ae856e7dcd50518c62eb0ffa9995affad6f1284dfb686eef8a1dba96ce57747b",
+      "size_bytes": 2372684
+    },
+    "mvsl_750_994/side_vector_level_123.pkl": {
+      "sha256": "5d5d66d3f87bb2dd5b2291fbb9d8853b156f986603ede19b875c6153d1014578",
+      "size_bytes": 966306
+    },
+    "sdpred_750/Text_similarity_five.pkl": {
+      "sha256": "c6831693b92b524077d11ff742f71fbe7f6e6078a7cebe061fdd9538ec83ac94",
+      "size_bytes": 4500139
+    },
+    "sdpred_750/Text_similarity_four.pkl": {
+      "sha256": "0836af52faf2c66903b532c67165b520aaf6262237e33da545da56befd81100e",
+      "size_bytes": 4500139
+    },
+    "sdpred_750/Text_similarity_one.pkl": {
+      "sha256": "983cfba362d6a0dd67595bfc86f7a3dcec037c2bff262065213a70b7aeb3333a",
+      "size_bytes": 4500139
+    },
+    "sdpred_750/Text_similarity_three.pkl": {
+      "sha256": "f26c12611a714861b3d72764cd5f31fa6b9c45d7d03fc1b61fb7fa455357a8c4",
+      "size_bytes": 4500139
+    },
+    "sdpred_750/Text_similarity_two.pkl": {
+      "sha256": "f20819b39dd1b81a98af7ef2e3761a93ca57828ba8e8dbc9b974e0b5dd2fa0d5",
+      "size_bytes": 4500139
+    },
+    "sdpred_750/drug_mol.pkl": {
+      "sha256": "61c955e75dad9f840c891ac355a70ae9df67fe1d54b94c023af5332ce16a7e83",
+      "size_bytes": 600138
+    },
+    "sdpred_750/drug_side.pkl": {
+      "sha256": "0c4d15614502856bdd940f69d860d171193b0e2946376419a701fb7d6f5f85c5",
+      "size_bytes": 5964139
+    },
+    "sdpred_750/drug_target.pkl": {
+      "sha256": "18925bdbfe9b3939d9c61f866c25097547a3f0ddd271377673b5e21059b12324",
+      "size_bytes": 5082139
+    },
+    "sdpred_750/fingerprint_similarity.pkl": {
+      "sha256": "a92c67aa78205645eb3b9a2ca955bdab9ab17d9bdb825dc38f969bd62b92407d",
+      "size_bytes": 4500139
+    },
+    "sdpred_750/glove_wordEmbedding.pkl": {
+      "sha256": "38f0b921881b12ff03366fccf8f96b0e7c5b361f7d9d7fe3eafc4669d9453193",
+      "size_bytes": 2385739
+    },
+    "sdpred_750/side_effect_semantic.pkl": {
+      "sha256": "f8f5f61075200b134ab9358f6079c5cf47ae2aa4ee318b5cb063d92137152b1d",
+      "size_bytes": 7904427
+    },
+    "splits/splitA_fold0_test.npy": {
+      "sha256": "ff154a106f97e17b452f5b43701bef044bf8db4caa2d7a4adde94357b1bf713e",
+      "size_bytes": 89120
+    },
+    "splits/splitA_fold0_train.npy": {
+      "sha256": "7e55dfa96db4f1004127d434ab50d71fc9192e067c307c86a6e5b30a47cf2667",
+      "size_bytes": 800840
+    },
+    "splits/splitA_fold1_test.npy": {
+      "sha256": "5710a05cee4082e363182235e508e7573d11ed31043d1bca28c76a31e3dc34c5",
+      "size_bytes": 89096
+    },
+    "splits/splitA_fold1_train.npy": {
+      "sha256": "47ccf20b335c42ae15c0b5e74628e8448a7840b020956807247544c68c968f3c",
+      "size_bytes": 800864
+    },
+    "splits/splitA_fold2_test.npy": {
+      "sha256": "1c3e11992a564c39d6aa1cbefdaf22a33eca9381922a74dd75ba8ca13ef7884c",
+      "size_bytes": 89096
+    },
+    "splits/splitA_fold2_train.npy": {
+      "sha256": "09f91fef20d692db6ffefbfa8a187ba75945939070baba43bd40adac8ba1122f",
+      "size_bytes": 800864
+    },
+    "splits/splitA_fold3_test.npy": {
+      "sha256": "35ded83ac7becaae7366f59299e5aa86e25fe0460b5ad0ca1d65bfba7faa2329",
+      "size_bytes": 89096
+    },
+    "splits/splitA_fold3_train.npy": {
+      "sha256": "7a7adf816d70e2c2822e31c6076187502de61e147cd9fa18bf2964199da03b9f",
+      "size_bytes": 800864
+    },
+    "splits/splitA_fold4_test.npy": {
+      "sha256": "83adc70ffaae90a3926333375d3bff38507dd9ac27e6cfc9af3a795ebc06af1e",
+      "size_bytes": 89096
+    },
+    "splits/splitA_fold4_train.npy": {
+      "sha256": "f6cf37b0a2ed608576fcdd6de01a627115a035b99a8830a3f08af42db423759c",
+      "size_bytes": 800864
+    },
+    "splits/splitA_fold5_test.npy": {
+      "sha256": "44b5f65a5fda524f553195a7dd9cd2d6421832c0aebfa568cf505c34a030c070",
+      "size_bytes": 89096
+    },
+    "splits/splitA_fold5_train.npy": {
+      "sha256": "b32301456aaafd162e1847cb544636a21e9b62d9a7d48570a7ef630d2c8d22b2",
+      "size_bytes": 800864
+    },
+    "splits/splitA_fold6_test.npy": {
+      "sha256": "e336d70ce5aa87434e46e89175194c0017611684e98b0a74f293b302aacc2b27",
+      "size_bytes": 89096
+    },
+    "splits/splitA_fold6_train.npy": {
+      "sha256": "1a87dab93df538cfb4c3b04d106a919184ad9acecb8a1bedc1fbd59821c994cb",
+      "size_bytes": 800864
+    },
+    "splits/splitA_fold7_test.npy": {
+      "sha256": "2d1dbce659656357db7a89028890032c98ad94871cf4b0836ba3224032478deb",
+      "size_bytes": 89096
+    },
+    "splits/splitA_fold7_train.npy": {
+      "sha256": "fe48473305208c49e64de9a8ae463efe40e67fa7e4259104264f04f37000e1bc",
+      "size_bytes": 800864
+    },
+    "splits/splitA_fold8_test.npy": {
+      "sha256": "cbf3e40061ef802a4d08864dfeca0520e6e2d23a7db895e02742808782c1f6e7",
+      "size_bytes": 89096
+    },
+    "splits/splitA_fold8_train.npy": {
+      "sha256": "03fa86cbabb6761fe69fb45302d0d5a3ae1208d297cbd9fab54b19c38b08624e",
+      "size_bytes": 800864
+    },
+    "splits/splitA_fold9_test.npy": {
+      "sha256": "c59ee7f8842039d40737f1de0032c5cc55709dd46f9faa26c103159b33b79b41",
+      "size_bytes": 89096
+    },
+    "splits/splitA_fold9_train.npy": {
+      "sha256": "83b2218982632150a9c2307c8ede6e390a8319d7b3e2479190a57c8dcca05273",
+      "size_bytes": 800864
+    },
+    "splits/splitB_fold0_test.npy": {
+      "sha256": "71a299d2e429e6770bd2ef21fd4c76c1c15efe3a43c649445106e68c1fdb8544",
+      "size_bytes": 83384
+    },
+    "splits/splitB_fold0_test_drugs.npy": {
+      "sha256": "8c9fd10b06a39802221a955b1fd7cf043799a5f7e67c17ce0b09468b0f76cbd6",
+      "size_bytes": 728
+    },
+    "splits/splitB_fold0_train.npy": {
+      "sha256": "f7bdb011e3168f54517112e28ff8e40c35eeac70002aef8c72cdb7df30c62fb8",
+      "size_bytes": 806576
+    },
+    "splits/splitB_fold1_test.npy": {
+      "sha256": "a0ece50e8dd52abb293ffa48b63b16b33aff80d196a758379515b666b2e6bc05",
+      "size_bytes": 92528
+    },
+    "splits/splitB_fold1_test_drugs.npy": {
+      "sha256": "2ad71a11b09d64ab0b94bcc0860aa487d1e8ee5cfeecfc22e2d1940e86c88b1b",
+      "size_bytes": 728
+    },
+    "splits/splitB_fold1_train.npy": {
+      "sha256": "1f4723111d057e7554f1c53e017b6be18343dc9751811ed7fa307aa8e47e5cb5",
+      "size_bytes": 797432
+    },
+    "splits/splitB_fold2_test.npy": {
+      "sha256": "15b50b0529f49eb18432f4627c105fa1889f788729a27eeda697f181192dcf68",
+      "size_bytes": 84176
+    },
+    "splits/splitB_fold2_test_drugs.npy": {
+      "sha256": "87a8970e9cfc4d0e67e5bc53a3e48d7366560999349cfe3b8be6e7707a401471",
+      "size_bytes": 728
+    },
+    "splits/splitB_fold2_train.npy": {
+      "sha256": "44cc854c0b42671945e05b5d5a4a3f4a3d85b29b0811d45dfcede47740914a58",
+      "size_bytes": 805784
+    },
+    "splits/splitB_fold3_test.npy": {
+      "sha256": "14e948d03284b90626705f2b9d97da68bc94e488cba09f6435c807045dcfbec1",
+      "size_bytes": 89168
+    },
+    "splits/splitB_fold3_test_drugs.npy": {
+      "sha256": "e079312196c564e400fefcfb755422aad05c8498f853d6792e1f911ba33ced6b",
+      "size_bytes": 728
+    },
+    "splits/splitB_fold3_train.npy": {
+      "sha256": "5690165f7873292fafca9cf550265f744840d4a7a1564fb7412aab8e0186e0e5",
+      "size_bytes": 800792
+    },
+    "splits/splitB_fold4_test.npy": {
+      "sha256": "aa0d28e3e2c81eda4559c815aa64e0ba33adb42272526befecfe4e855dd4d7c3",
+      "size_bytes": 90872
+    },
+    "splits/splitB_fold4_test_drugs.npy": {
+      "sha256": "2ca7aa8f0274f2e84a97fcb30a4387e258df7cfe515875fe8e56cb3851468cc2",
+      "size_bytes": 728
+    },
+    "splits/splitB_fold4_train.npy": {
+      "sha256": "f638680eb9579c4dcbf462cc256e8c6c3dd5052db2abf4cd84f1e1dd8f0faea8",
+      "size_bytes": 799088
+    },
+    "splits/splitB_fold5_test.npy": {
+      "sha256": "6936905542fd577258f8c20311f471fc612f40b94f095133efd7d9062aba07dd",
+      "size_bytes": 100088
+    },
+    "splits/splitB_fold5_test_drugs.npy": {
+      "sha256": "335636e468cfac25d50c2899a41d15a4195dadf1c13ecc523db62f86be1f619a",
+      "size_bytes": 728
+    },
+    "splits/splitB_fold5_train.npy": {
+      "sha256": "94b19401dfcaaf622bd52661a6245f689f6f45707e337d170755613614e68b36",
+      "size_bytes": 789872
+    },
+    "splits/splitB_fold6_test.npy": {
+      "sha256": "9e74cc4a39326dcc36565ea69691986f56ce61982b6ec6b9210e3b4823c9aac3",
+      "size_bytes": 96728
+    },
+    "splits/splitB_fold6_test_drugs.npy": {
+      "sha256": "2a1eaaa51fa95c7abdc89ac90a42fd7b6d35496a0e70fbde79b845d6473b4f3a",
+      "size_bytes": 728
+    },
+    "splits/splitB_fold6_train.npy": {
+      "sha256": "4313ff401b0f5cd463a5b9e72d79015224e2caa54ab5e4d5705623bcefb2827b",
+      "size_bytes": 793232
+    },
+    "splits/splitB_fold7_test.npy": {
+      "sha256": "bb983b96b5b677b6d7ff5fb0c8a828c4351e763a52faf6ec1bdeff8ac3211ca2",
+      "size_bytes": 78704
+    },
+    "splits/splitB_fold7_test_drugs.npy": {
+      "sha256": "7db403d544d83ce38afb943fa5d49a72eed933a2f1cfae746f3e8b0cd224939c",
+      "size_bytes": 728
+    },
+    "splits/splitB_fold7_train.npy": {
+      "sha256": "97586f39ef2f0afbc1939823c5e29b00e519799e8bc4cd56e4d861a5aebd5c92",
+      "size_bytes": 811256
+    },
+    "splits/splitB_fold8_test.npy": {
+      "sha256": "1132f360126db875c9877361099ede8761003b5c546807a548550ac1d82e16c6",
+      "size_bytes": 78512
+    },
+    "splits/splitB_fold8_test_drugs.npy": {
+      "sha256": "36911a1a1c8fadf33497ffb493612d09a91a1648c20bc7a571a1b6bd3bfdcfe0",
+      "size_bytes": 728
+    },
+    "splits/splitB_fold8_train.npy": {
+      "sha256": "cf24b1b4f78156fb99c1f84fb43d29a51194d8868ed9b61d77880c400ade22c7",
+      "size_bytes": 811448
+    },
+    "splits/splitB_fold9_test.npy": {
+      "sha256": "fbaa9341652ba97a3a77b54dc4d53cf04f7738313f0e348b8cba1caa3af982c8",
+      "size_bytes": 96824
+    },
+    "splits/splitB_fold9_test_drugs.npy": {
+      "sha256": "0dbe65859a0c40082ff1a310d5324c7a4d85c67c6c0119e26e3ad827fba1370f",
+      "size_bytes": 728
+    },
+    "splits/splitB_fold9_train.npy": {
+      "sha256": "4b7cd2ac52134805446e5e3c2caaac3d304a52a69f64f5290601153709391291",
+      "size_bytes": 793136
+    }
+  }
+}

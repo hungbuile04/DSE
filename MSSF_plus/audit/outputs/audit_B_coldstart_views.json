@@ -1,0 +1,2890 @@
+{
+  "unmatched_drugs": [
+    0,
+    2,
+    4,
+    11,
+    18,
+    19,
+    21,
+    22,
+    23,
+    24,
+    28,
+    51,
+    53,
+    55,
+    63,
+    72,
+    76,
+    90,
+    94,
+    97,
+    103,
+    109,
+    114,
+    127,
+    129,
+    135,
+    137,
+    141,
+    150,
+    152,
+    166,
+    177,
+    178,
+    185,
+    202,
+    215,
+    222,
+    228,
+    259,
+    264,
+    266,
+    276,
+    287,
+    308,
+    311,
+    314,
+    323,
+    341,
+    345,
+    347,
+    351,
+    358,
+    368,
+    373,
+    374,
+    380,
+    381,
+    390,
+    392,
+    395,
+    441,
+    446,
+    461,
+    464,
+    469,
+    474,
+    482,
+    486,
+    488,
+    495,
+    502,
+    508,
+    510,
+    538,
+    542,
+    548,
+    565,
+    587,
+    617,
+    624,
+    628,
+    630,
+    632,
+    633,
+    639,
+    641,
+    644,
+    645,
+    651,
+    653,
+    659,
+    660,
+    662,
+    664,
+    675,
+    682,
+    685,
+    699,
+    701,
+    702,
+    709,
+    711,
+    717,
+    718,
+    719,
+    721,
+    722,
+    739,
+    740,
+    743,
+    747
+  ],
+  "unmatched_drug_empty_views": {
+    "0": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five"
+    ],
+    "2": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D7_target_cos",
+      "D11_pathway_enzyme"
+    ],
+    "4": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five"
+    ],
+    "11": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D7_target_cos",
+      "D11_pathway_enzyme"
+    ],
+    "18": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five"
+    ],
+    "19": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five"
+    ],
+    "21": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five"
+    ],
+    "22": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "23": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five"
+    ],
+    "24": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "28": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "51": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "53": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five"
+    ],
+    "55": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "63": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five"
+    ],
+    "72": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "76": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five"
+    ],
+    "90": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "94": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "97": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five"
+    ],
+    "103": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five"
+    ],
+    "109": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five"
+    ],
+    "114": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "127": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "129": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "135": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "137": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "141": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five"
+    ],
+    "150": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D7_target_cos",
+      "D11_pathway_enzyme"
+    ],
+    "152": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five"
+    ],
+    "166": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "177": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D7_target_cos",
+      "D11_pathway_enzyme"
+    ],
+    "178": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five"
+    ],
+    "185": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five"
+    ],
+    "202": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "215": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five"
+    ],
+    "222": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "228": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five"
+    ],
+    "259": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "264": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "266": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "276": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D7_target_cos",
+      "D11_pathway_enzyme"
+    ],
+    "287": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "308": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "311": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "314": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "323": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five"
+    ],
+    "341": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "345": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "347": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "351": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five"
+    ],
+    "358": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "368": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five"
+    ],
+    "373": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "374": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "380": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "381": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five"
+    ],
+    "390": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "392": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D7_target_cos",
+      "D11_pathway_enzyme"
+    ],
+    "395": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five"
+    ],
+    "441": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "446": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "461": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "464": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "469": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "474": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "482": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five"
+    ],
+    "486": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five"
+    ],
+    "488": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D7_target_cos",
+      "D11_pathway_enzyme"
+    ],
+    "495": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D7_target_cos",
+      "D11_pathway_enzyme"
+    ],
+    "502": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five"
+    ],
+    "508": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "510": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D7_target_cos",
+      "D11_pathway_enzyme"
+    ],
+    "538": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "542": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "548": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "565": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "587": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D7_target_cos",
+      "D11_pathway_enzyme"
+    ],
+    "617": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D7_target_cos",
+      "D8_fingerprint",
+      "D11_pathway_enzyme"
+    ],
+    "624": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D7_target_cos",
+      "D11_pathway_enzyme"
+    ],
+    "628": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D7_target_cos",
+      "D8_fingerprint",
+      "D11_pathway_enzyme"
+    ],
+    "630": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D7_target_cos",
+      "D11_pathway_enzyme"
+    ],
+    "632": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "633": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "639": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D7_target_cos",
+      "D11_pathway_enzyme"
+    ],
+    "641": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D7_target_cos",
+      "D11_pathway_enzyme"
+    ],
+    "644": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "645": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "651": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "653": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D7_target_cos",
+      "D11_pathway_enzyme"
+    ],
+    "659": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "660": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D7_target_cos",
+      "D11_pathway_enzyme"
+    ],
+    "662": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "664": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "675": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D7_target_cos",
+      "D11_pathway_enzyme"
+    ],
+    "682": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "685": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "699": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "701": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D7_target_cos",
+      "D11_pathway_enzyme"
+    ],
+    "702": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D7_target_cos",
+      "D11_pathway_enzyme"
+    ],
+    "709": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "711": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D7_target_cos",
+      "D11_pathway_enzyme"
+    ],
+    "717": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "718": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D7_target_cos",
+      "D11_pathway_enzyme"
+    ],
+    "719": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "721": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "722": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ],
+    "739": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D7_target_cos",
+      "D11_pathway_enzyme"
+    ],
+    "740": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D7_target_cos",
+      "D11_pathway_enzyme"
+    ],
+    "743": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D7_target_cos",
+      "D11_pathway_enzyme"
+    ],
+    "747": [
+      "D1_stitch_one",
+      "D2_stitch_two",
+      "D3_stitch_three",
+      "D4_stitch_four",
+      "D5_stitch_five",
+      "D11_pathway_enzyme"
+    ]
+  },
+  "per_fold": {
+    "0": {
+      "n_test_drugs": 75,
+      "test_rows_in_masked_matrix_all_zero": true,
+      "unmatched_drugs_in_test": [
+        23,
+        51,
+        103,
+        137,
+        177,
+        311,
+        345,
+        358,
+        617,
+        630,
+        659,
+        660
+      ],
+      "drug_views_test": {
+        "D1_stitch_one": {
+          "frac_rows_all_zero": 0.08,
+          "frac_rows_no_offdiag_info": 0.5733333333333334,
+          "mean_row_abs_sum": 1.6304133333333333,
+          "mean_diag": 0.8666666666666667
+        },
+        "D2_stitch_two": {
+          "frac_rows_all_zero": 0.10666666666666667,
+          "frac_rows_no_offdiag_info": 0.49333333333333335,
+          "mean_row_abs_sum": 2.50128,
+          "mean_diag": 0.8666666666666667
+        },
+        "D3_stitch_three": {
+          "frac_rows_all_zero": 0.12,
+          "frac_rows_no_offdiag_info": 0.92,
+          "mean_row_abs_sum": 1.06,
+          "mean_diag": 0.8666666666666667
+        },
+        "D4_stitch_four": {
+          "frac_rows_all_zero": 0.013333333333333334,
+          "frac_rows_no_offdiag_info": 0.16,
+          "mean_row_abs_sum": 19.435920000000003,
+          "mean_diag": 0.8666666666666667
+        },
+        "D5_stitch_five": {
+          "frac_rows_all_zero": 0.013333333333333334,
+          "frac_rows_no_offdiag_info": 0.16,
+          "mean_row_abs_sum": 20.387773333333335,
+          "mean_diag": 0.8666666666666667
+        },
+        "D6_mol2vec_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 613.7158453985292,
+          "mean_diag": 1.0
+        },
+        "D7_target_cos": {
+          "frac_rows_all_zero": 0.16,
+          "frac_rows_no_offdiag_info": 0.21333333333333335,
+          "mean_row_abs_sum": 8.04321615764042,
+          "mean_diag": 0.84
+        },
+        "D8_fingerprint": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.013333333333333334,
+          "mean_row_abs_sum": 173.17176269591494,
+          "mean_diag": 1.0
+        },
+        "D9_profile_freq_cos": {
+          "frac_rows_all_zero": 1.0,
+          "frac_rows_no_offdiag_info": 1.0,
+          "mean_row_abs_sum": 0.0,
+          "mean_diag": 0.0
+        },
+        "D10_profile_bin_cos": {
+          "frac_rows_all_zero": 1.0,
+          "frac_rows_no_offdiag_info": 1.0,
+          "mean_row_abs_sum": 0.0,
+          "mean_diag": 0.0
+        },
+        "D11_pathway_enzyme": {
+          "frac_rows_all_zero": 0.8133333333333334,
+          "frac_rows_no_offdiag_info": 0.84,
+          "mean_row_abs_sum": 1.7834701834589393,
+          "mean_diag": 0.18
+        }
+      },
+      "drug_views_train": {
+        "D1_stitch_one": {
+          "frac_rows_all_zero": 0.08296296296296296,
+          "frac_rows_no_offdiag_info": 0.5525925925925926,
+          "mean_row_abs_sum": 1.719814814814815,
+          "mean_diag": 0.8740740740740741
+        },
+        "D2_stitch_two": {
+          "frac_rows_all_zero": 0.07851851851851852,
+          "frac_rows_no_offdiag_info": 0.3837037037037037,
+          "mean_row_abs_sum": 3.1649659259259257,
+          "mean_diag": 0.8740740740740741
+        },
+        "D3_stitch_three": {
+          "frac_rows_all_zero": 0.12444444444444444,
+          "frac_rows_no_offdiag_info": 0.9688888888888889,
+          "mean_row_abs_sum": 0.9385185185185185,
+          "mean_diag": 0.8740740740740741
+        },
+        "D4_stitch_four": {
+          "frac_rows_all_zero": 0.017777777777777778,
+          "frac_rows_no_offdiag_info": 0.16592592592592592,
+          "mean_row_abs_sum": 20.258471111111113,
+          "mean_diag": 0.8740740740740741
+        },
+        "D5_stitch_five": {
+          "frac_rows_all_zero": 0.016296296296296295,
+          "frac_rows_no_offdiag_info": 0.14666666666666667,
+          "mean_row_abs_sum": 21.484653333333334,
+          "mean_diag": 0.8740740740740741
+        },
+        "D6_mol2vec_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 621.1644710221675,
+          "mean_diag": 1.0
+        },
+        "D7_target_cos": {
+          "frac_rows_all_zero": 0.08444444444444445,
+          "frac_rows_no_offdiag_info": 0.1748148148148148,
+          "mean_row_abs_sum": 7.96692732737344,
+          "mean_diag": 0.9155555555555556
+        },
+        "D8_fingerprint": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0014814814814814814,
+          "mean_row_abs_sum": 186.7935206422113,
+          "mean_diag": 1.0
+        },
+        "D9_profile_freq_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 148.34374694874398,
+          "mean_diag": 1.0
+        },
+        "D10_profile_bin_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 139.26862335456062,
+          "mean_diag": 1.0
+        },
+        "D11_pathway_enzyme": {
+          "frac_rows_all_zero": 0.7496296296296296,
+          "frac_rows_no_offdiag_info": 0.7733333333333333,
+          "mean_row_abs_sum": 2.0856666156116477,
+          "mean_diag": 0.23925925925925925
+        }
+      },
+      "D9_train_rows_cols_testdrugs_all_zero": true,
+      "ses_without_any_train_pair": [],
+      "se_views_all_ses": {
+        "S1_adrecs_semantic": {
+          "frac_rows_all_zero": 0.005030181086519115,
+          "frac_rows_no_offdiag_info": 0.005030181086519115,
+          "mean_row_abs_sum": 10.707482034278367,
+          "mean_diag": 0.9949698189134809
+        },
+        "S2_glove_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 215.10639565947707,
+          "mean_diag": 1.0
+        },
+        "S3_profile_freq_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 114.3283070198962,
+          "mean_diag": 1.0
+        },
+        "S4_profile_bin_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 133.24475054650438,
+          "mean_diag": 1.0
+        }
+      },
+      "n_test_pairs_whose_SE_has_no_train_pair": 0,
+      "n_test_ses": 716,
+      "MGPred_test_drugs_missing_from_u_adj": 75,
+      "SDPred_train_negatives_with_test_drug": 3382,
+      "SDPred_test_negatives_with_train_drug": 3128,
+      "SDPred_n_train_neg": 33602,
+      "SDPred_n_test_neg": 3469
+    },
+    "1": {
+      "n_test_drugs": 75,
+      "test_rows_in_masked_matrix_all_zero": true,
+      "unmatched_drugs_in_test": [
+        2,
+        55,
+        94,
+        141,
+        392,
+        395,
+        464,
+        495,
+        641,
+        739
+      ],
+      "drug_views_test": {
+        "D1_stitch_one": {
+          "frac_rows_all_zero": 0.10666666666666667,
+          "frac_rows_no_offdiag_info": 0.6,
+          "mean_row_abs_sum": 1.5706533333333332,
+          "mean_diag": 0.84
+        },
+        "D2_stitch_two": {
+          "frac_rows_all_zero": 0.09333333333333334,
+          "frac_rows_no_offdiag_info": 0.4266666666666667,
+          "mean_row_abs_sum": 3.1058799999999995,
+          "mean_diag": 0.84
+        },
+        "D3_stitch_three": {
+          "frac_rows_all_zero": 0.16,
+          "frac_rows_no_offdiag_info": 0.9866666666666667,
+          "mean_row_abs_sum": 0.864,
+          "mean_diag": 0.84
+        },
+        "D4_stitch_four": {
+          "frac_rows_all_zero": 0.02666666666666667,
+          "frac_rows_no_offdiag_info": 0.13333333333333333,
+          "mean_row_abs_sum": 17.281186666666667,
+          "mean_diag": 0.84
+        },
+        "D5_stitch_five": {
+          "frac_rows_all_zero": 0.02666666666666667,
+          "frac_rows_no_offdiag_info": 0.13333333333333333,
+          "mean_row_abs_sum": 18.60128,
+          "mean_diag": 0.84
+        },
+        "D6_mol2vec_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 613.1716508172327,
+          "mean_diag": 1.0
+        },
+        "D7_target_cos": {
+          "frac_rows_all_zero": 0.14666666666666667,
+          "frac_rows_no_offdiag_info": 0.22666666666666666,
+          "mean_row_abs_sum": 6.4835002800780765,
+          "mean_diag": 0.8533333333333334
+        },
+        "D8_fingerprint": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 182.12542329414703,
+          "mean_diag": 1.0
+        },
+        "D9_profile_freq_cos": {
+          "frac_rows_all_zero": 1.0,
+          "frac_rows_no_offdiag_info": 1.0,
+          "mean_row_abs_sum": 0.0,
+          "mean_diag": 0.0
+        },
+        "D10_profile_bin_cos": {
+          "frac_rows_all_zero": 1.0,
+          "frac_rows_no_offdiag_info": 1.0,
+          "mean_row_abs_sum": 0.0,
+          "mean_diag": 0.0
+        },
+        "D11_pathway_enzyme": {
+          "frac_rows_all_zero": 0.8133333333333334,
+          "frac_rows_no_offdiag_info": 0.8133333333333334,
+          "mean_row_abs_sum": 1.5727209694653252,
+          "mean_diag": 0.18666666666666668
+        }
+      },
+      "drug_views_train": {
+        "D1_stitch_one": {
+          "frac_rows_all_zero": 0.08,
+          "frac_rows_no_offdiag_info": 0.5496296296296296,
+          "mean_row_abs_sum": 1.7264548148148147,
+          "mean_diag": 0.8770370370370371
+        },
+        "D2_stitch_two": {
+          "frac_rows_all_zero": 0.08,
+          "frac_rows_no_offdiag_info": 0.39111111111111113,
+          "mean_row_abs_sum": 3.0977881481481475,
+          "mean_diag": 0.8770370370370371
+        },
+        "D3_stitch_three": {
+          "frac_rows_all_zero": 0.12,
+          "frac_rows_no_offdiag_info": 0.9614814814814815,
+          "mean_row_abs_sum": 0.9602962962962963,
+          "mean_diag": 0.8770370370370371
+        },
+        "D4_stitch_four": {
+          "frac_rows_all_zero": 0.016296296296296295,
+          "frac_rows_no_offdiag_info": 0.1688888888888889,
+          "mean_row_abs_sum": 20.497885925925925,
+          "mean_diag": 0.8770370370370371
+        },
+        "D5_stitch_five": {
+          "frac_rows_all_zero": 0.014814814814814815,
+          "frac_rows_no_offdiag_info": 0.14962962962962964,
+          "mean_row_abs_sum": 21.683152592592595,
+          "mean_diag": 0.8770370370370371
+        },
+        "D6_mol2vec_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 621.2249370867559,
+          "mean_diag": 1.0
+        },
+        "D7_target_cos": {
+          "frac_rows_all_zero": 0.08592592592592592,
+          "frac_rows_no_offdiag_info": 0.17333333333333334,
+          "mean_row_abs_sum": 8.140229091547035,
+          "mean_diag": 0.914074074074074
+        },
+        "D8_fingerprint": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.002962962962962963,
+          "mean_row_abs_sum": 185.79866946463,
+          "mean_diag": 1.0
+        },
+        "D9_profile_freq_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 149.55359812899977,
+          "mean_diag": 1.0
+        },
+        "D10_profile_bin_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 140.48412412162054,
+          "mean_diag": 1.0
+        },
+        "D11_pathway_enzyme": {
+          "frac_rows_all_zero": 0.7496296296296296,
+          "frac_rows_no_offdiag_info": 0.7762962962962963,
+          "mean_row_abs_sum": 2.1090831949442714,
+          "mean_diag": 0.23851851851851852
+        }
+      },
+      "D9_train_rows_cols_testdrugs_all_zero": true,
+      "ses_without_any_train_pair": [],
+      "se_views_all_ses": {
+        "S1_adrecs_semantic": {
+          "frac_rows_all_zero": 0.005030181086519115,
+          "frac_rows_no_offdiag_info": 0.005030181086519115,
+          "mean_row_abs_sum": 10.707482034278367,
+          "mean_diag": 0.9949698189134809
+        },
+        "S2_glove_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 215.10639565947707,
+          "mean_diag": 1.0
+        },
+        "S3_profile_freq_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 110.54686097014861,
+          "mean_diag": 1.0
+        },
+        "S4_profile_bin_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 129.7308012407544,
+          "mean_diag": 1.0
+        }
+      },
+      "n_test_pairs_whose_SE_has_no_train_pair": 0,
+      "n_test_ses": 773,
+      "MGPred_test_drugs_missing_from_u_adj": 75,
+      "SDPred_train_negatives_with_test_drug": 3378,
+      "SDPred_test_negatives_with_train_drug": 3487,
+      "SDPred_n_train_neg": 33221,
+      "SDPred_n_test_neg": 3850
+    },
+    "2": {
+      "n_test_drugs": 75,
+      "test_rows_in_masked_matrix_all_zero": true,
+      "unmatched_drugs_in_test": [
+        18,
+        127,
+        150,
+        308,
+        314,
+        662,
+        685,
+        743,
+        747
+      ],
+      "drug_views_test": {
+        "D1_stitch_one": {
+          "frac_rows_all_zero": 0.12,
+          "frac_rows_no_offdiag_info": 0.4533333333333333,
+          "mean_row_abs_sum": 1.78164,
+          "mean_diag": 0.8266666666666667
+        },
+        "D2_stitch_two": {
+          "frac_rows_all_zero": 0.09333333333333334,
+          "frac_rows_no_offdiag_info": 0.3333333333333333,
+          "mean_row_abs_sum": 3.476093333333333,
+          "mean_diag": 0.8266666666666667
+        },
+        "D3_stitch_three": {
+          "frac_rows_all_zero": 0.17333333333333334,
+          "frac_rows_no_offdiag_info": 0.96,
+          "mean_row_abs_sum": 0.8986666666666667,
+          "mean_diag": 0.8266666666666667
+        },
+        "D4_stitch_four": {
+          "frac_rows_all_zero": 0.04,
+          "frac_rows_no_offdiag_info": 0.13333333333333333,
+          "mean_row_abs_sum": 22.09948,
+          "mean_diag": 0.8266666666666667
+        },
+        "D5_stitch_five": {
+          "frac_rows_all_zero": 0.02666666666666667,
+          "frac_rows_no_offdiag_info": 0.12,
+          "mean_row_abs_sum": 23.46236,
+          "mean_diag": 0.8266666666666667
+        },
+        "D6_mol2vec_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 621.4413190810675,
+          "mean_diag": 1.0
+        },
+        "D7_target_cos": {
+          "frac_rows_all_zero": 0.12,
+          "frac_rows_no_offdiag_info": 0.18666666666666668,
+          "mean_row_abs_sum": 9.378778303325742,
+          "mean_diag": 0.88
+        },
+        "D8_fingerprint": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 187.60304061657374,
+          "mean_diag": 1.0
+        },
+        "D9_profile_freq_cos": {
+          "frac_rows_all_zero": 1.0,
+          "frac_rows_no_offdiag_info": 1.0,
+          "mean_row_abs_sum": 0.0,
+          "mean_diag": 0.0
+        },
+        "D10_profile_bin_cos": {
+          "frac_rows_all_zero": 1.0,
+          "frac_rows_no_offdiag_info": 1.0,
+          "mean_row_abs_sum": 0.0,
+          "mean_diag": 0.0
+        },
+        "D11_pathway_enzyme": {
+          "frac_rows_all_zero": 0.72,
+          "frac_rows_no_offdiag_info": 0.7866666666666666,
+          "mean_row_abs_sum": 1.6183182682628752,
+          "mean_diag": 0.24666666666666667
+        }
+      },
+      "drug_views_train": {
+        "D1_stitch_one": {
+          "frac_rows_all_zero": 0.07851851851851852,
+          "frac_rows_no_offdiag_info": 0.5659259259259259,
+          "mean_row_abs_sum": 1.7030118518518518,
+          "mean_diag": 0.8785185185185185
+        },
+        "D2_stitch_two": {
+          "frac_rows_all_zero": 0.08,
+          "frac_rows_no_offdiag_info": 0.4014814814814815,
+          "mean_row_abs_sum": 3.0566533333333332,
+          "mean_diag": 0.8785185185185185
+        },
+        "D3_stitch_three": {
+          "frac_rows_all_zero": 0.11851851851851852,
+          "frac_rows_no_offdiag_info": 0.9644444444444444,
+          "mean_row_abs_sum": 0.9564444444444444,
+          "mean_diag": 0.8785185185185185
+        },
+        "D4_stitch_four": {
+          "frac_rows_all_zero": 0.014814814814814815,
+          "frac_rows_no_offdiag_info": 0.1688888888888889,
+          "mean_row_abs_sum": 19.96252,
+          "mean_diag": 0.8785185185185185
+        },
+        "D5_stitch_five": {
+          "frac_rows_all_zero": 0.014814814814814815,
+          "frac_rows_no_offdiag_info": 0.1511111111111111,
+          "mean_row_abs_sum": 21.14303259259259,
+          "mean_diag": 0.8785185185185185
+        },
+        "D6_mol2vec_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 620.306085057441,
+          "mean_diag": 1.0
+        },
+        "D7_target_cos": {
+          "frac_rows_all_zero": 0.08888888888888889,
+          "frac_rows_no_offdiag_info": 0.17777777777777778,
+          "mean_row_abs_sum": 7.818531533408405,
+          "mean_diag": 0.9111111111111111
+        },
+        "D8_fingerprint": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.002962962962962963,
+          "mean_row_abs_sum": 185.19004531769366,
+          "mean_diag": 1.0
+        },
+        "D9_profile_freq_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 150.13737755753283,
+          "mean_diag": 1.0
+        },
+        "D10_profile_bin_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 140.7963392801982,
+          "mean_diag": 1.0
+        },
+        "D11_pathway_enzyme": {
+          "frac_rows_all_zero": 0.76,
+          "frac_rows_no_offdiag_info": 0.7792592592592592,
+          "mean_row_abs_sum": 2.1040168284112104,
+          "mean_diag": 0.23185185185185186
+        }
+      },
+      "D9_train_rows_cols_testdrugs_all_zero": true,
+      "ses_without_any_train_pair": [],
+      "se_views_all_ses": {
+        "S1_adrecs_semantic": {
+          "frac_rows_all_zero": 0.005030181086519115,
+          "frac_rows_no_offdiag_info": 0.005030181086519115,
+          "mean_row_abs_sum": 10.707482034278367,
+          "mean_diag": 0.9949698189134809
+        },
+        "S2_glove_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 215.10639565947707,
+          "mean_diag": 1.0
+        },
+        "S3_profile_freq_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 115.15048376955998,
+          "mean_diag": 1.0
+        },
+        "S4_profile_bin_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 133.58102451413757,
+          "mean_diag": 1.0
+        }
+      },
+      "n_test_pairs_whose_SE_has_no_train_pair": 0,
+      "n_test_ses": 731,
+      "MGPred_test_drugs_missing_from_u_adj": 75,
+      "SDPred_train_negatives_with_test_drug": 3279,
+      "SDPred_test_negatives_with_train_drug": 3174,
+      "SDPred_n_train_neg": 33569,
+      "SDPred_n_test_neg": 3502
+    },
+    "3": {
+      "n_test_drugs": 75,
+      "test_rows_in_masked_matrix_all_zero": true,
+      "unmatched_drugs_in_test": [
+        4,
+        63,
+        152,
+        166,
+        222,
+        347,
+        390,
+        488,
+        538,
+        542,
+        587,
+        628,
+        645
+      ],
+      "drug_views_test": {
+        "D1_stitch_one": {
+          "frac_rows_all_zero": 0.06666666666666667,
+          "frac_rows_no_offdiag_info": 0.56,
+          "mean_row_abs_sum": 1.6631066666666665,
+          "mean_diag": 0.9066666666666666
+        },
+        "D2_stitch_two": {
+          "frac_rows_all_zero": 0.08,
+          "frac_rows_no_offdiag_info": 0.4666666666666667,
+          "mean_row_abs_sum": 3.0988666666666664,
+          "mean_diag": 0.9066666666666666
+        },
+        "D3_stitch_three": {
+          "frac_rows_all_zero": 0.09333333333333334,
+          "frac_rows_no_offdiag_info": 0.9733333333333334,
+          "mean_row_abs_sum": 0.9786666666666668,
+          "mean_diag": 0.9066666666666666
+        },
+        "D4_stitch_four": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.17333333333333334,
+          "mean_row_abs_sum": 18.711479999999998,
+          "mean_diag": 0.9066666666666666
+        },
+        "D5_stitch_five": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.17333333333333334,
+          "mean_row_abs_sum": 19.88937333333333,
+          "mean_diag": 0.9066666666666666
+        },
+        "D6_mol2vec_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 627.0236836195871,
+          "mean_diag": 1.0
+        },
+        "D7_target_cos": {
+          "frac_rows_all_zero": 0.09333333333333334,
+          "frac_rows_no_offdiag_info": 0.14666666666666667,
+          "mean_row_abs_sum": 8.234448936152903,
+          "mean_diag": 0.9066666666666666
+        },
+        "D8_fingerprint": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.013333333333333334,
+          "mean_row_abs_sum": 192.14995894694445,
+          "mean_diag": 1.0
+        },
+        "D9_profile_freq_cos": {
+          "frac_rows_all_zero": 1.0,
+          "frac_rows_no_offdiag_info": 1.0,
+          "mean_row_abs_sum": 0.0,
+          "mean_diag": 0.0
+        },
+        "D10_profile_bin_cos": {
+          "frac_rows_all_zero": 1.0,
+          "frac_rows_no_offdiag_info": 1.0,
+          "mean_row_abs_sum": 0.0,
+          "mean_diag": 0.0
+        },
+        "D11_pathway_enzyme": {
+          "frac_rows_all_zero": 0.6933333333333334,
+          "frac_rows_no_offdiag_info": 0.76,
+          "mean_row_abs_sum": 1.915820931007479,
+          "mean_diag": 0.28
+        }
+      },
+      "drug_views_train": {
+        "D1_stitch_one": {
+          "frac_rows_all_zero": 0.08444444444444445,
+          "frac_rows_no_offdiag_info": 0.554074074074074,
+          "mean_row_abs_sum": 1.7161822222222223,
+          "mean_diag": 0.8696296296296296
+        },
+        "D2_stitch_two": {
+          "frac_rows_all_zero": 0.08148148148148149,
+          "frac_rows_no_offdiag_info": 0.38666666666666666,
+          "mean_row_abs_sum": 3.0985674074074074,
+          "mean_diag": 0.8696296296296296
+        },
+        "D3_stitch_three": {
+          "frac_rows_all_zero": 0.1274074074074074,
+          "frac_rows_no_offdiag_info": 0.9629629629629629,
+          "mean_row_abs_sum": 0.9475555555555556,
+          "mean_diag": 0.8696296296296296
+        },
+        "D4_stitch_four": {
+          "frac_rows_all_zero": 0.01925925925925926,
+          "frac_rows_no_offdiag_info": 0.16444444444444445,
+          "mean_row_abs_sum": 20.338964444444446,
+          "mean_diag": 0.8696296296296296
+        },
+        "D5_stitch_five": {
+          "frac_rows_all_zero": 0.017777777777777778,
+          "frac_rows_no_offdiag_info": 0.1451851851851852,
+          "mean_row_abs_sum": 21.54003111111111,
+          "mean_diag": 0.8696296296296296
+        },
+        "D6_mol2vec_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 619.6858223309387,
+          "mean_diag": 1.0
+        },
+        "D7_target_cos": {
+          "frac_rows_all_zero": 0.09185185185185185,
+          "frac_rows_no_offdiag_info": 0.18222222222222223,
+          "mean_row_abs_sum": 7.945679240872053,
+          "mean_diag": 0.9081481481481481
+        },
+        "D8_fingerprint": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0014814814814814814,
+          "mean_row_abs_sum": 184.6848321698747,
+          "mean_diag": 1.0
+        },
+        "D9_profile_freq_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 149.0925885366418,
+          "mean_diag": 1.0
+        },
+        "D10_profile_bin_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 139.81835518535146,
+          "mean_diag": 1.0
+        },
+        "D11_pathway_enzyme": {
+          "frac_rows_all_zero": 0.762962962962963,
+          "frac_rows_no_offdiag_info": 0.7822222222222223,
+          "mean_row_abs_sum": 2.0709609769951434,
+          "mean_diag": 0.22814814814814816
+        }
+      },
+      "D9_train_rows_cols_testdrugs_all_zero": true,
+      "ses_without_any_train_pair": [],
+      "se_views_all_ses": {
+        "S1_adrecs_semantic": {
+          "frac_rows_all_zero": 0.005030181086519115,
+          "frac_rows_no_offdiag_info": 0.005030181086519115,
+          "mean_row_abs_sum": 10.707482034278367,
+          "mean_diag": 0.9949698189134809
+        },
+        "S2_glove_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 215.10639565947707,
+          "mean_diag": 1.0
+        },
+        "S3_profile_freq_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 112.73432788345029,
+          "mean_diag": 1.0
+        },
+        "S4_profile_bin_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 130.6591383910803,
+          "mean_diag": 1.0
+        }
+      },
+      "n_test_pairs_whose_SE_has_no_train_pair": 0,
+      "n_test_ses": 737,
+      "MGPred_test_drugs_missing_from_u_adj": 75,
+      "SDPred_train_negatives_with_test_drug": 3297,
+      "SDPred_test_negatives_with_train_drug": 3327,
+      "SDPred_n_train_neg": 33361,
+      "SDPred_n_test_neg": 3710
+    },
+    "4": {
+      "n_test_drugs": 75,
+      "test_rows_in_masked_matrix_all_zero": true,
+      "unmatched_drugs_in_test": [
+        72,
+        129,
+        202,
+        374,
+        461,
+        699
+      ],
+      "drug_views_test": {
+        "D1_stitch_one": {
+          "frac_rows_all_zero": 0.02666666666666667,
+          "frac_rows_no_offdiag_info": 0.52,
+          "mean_row_abs_sum": 1.9226533333333335,
+          "mean_diag": 0.9333333333333333
+        },
+        "D2_stitch_two": {
+          "frac_rows_all_zero": 0.05333333333333334,
+          "frac_rows_no_offdiag_info": 0.36,
+          "mean_row_abs_sum": 3.11992,
+          "mean_diag": 0.9333333333333333
+        },
+        "D3_stitch_three": {
+          "frac_rows_all_zero": 0.05333333333333334,
+          "frac_rows_no_offdiag_info": 0.9333333333333333,
+          "mean_row_abs_sum": 1.0186666666666668,
+          "mean_diag": 0.9333333333333333
+        },
+        "D4_stitch_four": {
+          "frac_rows_all_zero": 0.013333333333333334,
+          "frac_rows_no_offdiag_info": 0.09333333333333334,
+          "mean_row_abs_sum": 25.04324,
+          "mean_diag": 0.9333333333333333
+        },
+        "D5_stitch_five": {
+          "frac_rows_all_zero": 0.013333333333333334,
+          "frac_rows_no_offdiag_info": 0.08,
+          "mean_row_abs_sum": 26.13012,
+          "mean_diag": 0.9333333333333333
+        },
+        "D6_mol2vec_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 619.5445589612444,
+          "mean_diag": 1.0
+        },
+        "D7_target_cos": {
+          "frac_rows_all_zero": 0.05333333333333334,
+          "frac_rows_no_offdiag_info": 0.12,
+          "mean_row_abs_sum": 10.18959818579175,
+          "mean_diag": 0.9466666666666667
+        },
+        "D8_fingerprint": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 182.32879790906648,
+          "mean_diag": 1.0
+        },
+        "D9_profile_freq_cos": {
+          "frac_rows_all_zero": 1.0,
+          "frac_rows_no_offdiag_info": 1.0,
+          "mean_row_abs_sum": 0.0,
+          "mean_diag": 0.0
+        },
+        "D10_profile_bin_cos": {
+          "frac_rows_all_zero": 1.0,
+          "frac_rows_no_offdiag_info": 1.0,
+          "mean_row_abs_sum": 0.0,
+          "mean_diag": 0.0
+        },
+        "D11_pathway_enzyme": {
+          "frac_rows_all_zero": 0.7333333333333333,
+          "frac_rows_no_offdiag_info": 0.7466666666666667,
+          "mean_row_abs_sum": 2.6450052716931136,
+          "mean_diag": 0.26
+        }
+      },
+      "drug_views_train": {
+        "D1_stitch_one": {
+          "frac_rows_all_zero": 0.08888888888888889,
+          "frac_rows_no_offdiag_info": 0.5585185185185185,
+          "mean_row_abs_sum": 1.6873437037037036,
+          "mean_diag": 0.8666666666666667
+        },
+        "D2_stitch_two": {
+          "frac_rows_all_zero": 0.08444444444444445,
+          "frac_rows_no_offdiag_info": 0.3985185185185185,
+          "mean_row_abs_sum": 3.096228148148148,
+          "mean_diag": 0.8666666666666667
+        },
+        "D3_stitch_three": {
+          "frac_rows_all_zero": 0.13185185185185186,
+          "frac_rows_no_offdiag_info": 0.9674074074074074,
+          "mean_row_abs_sum": 0.943111111111111,
+          "mean_diag": 0.8666666666666667
+        },
+        "D4_stitch_four": {
+          "frac_rows_all_zero": 0.017777777777777778,
+          "frac_rows_no_offdiag_info": 0.17333333333333334,
+          "mean_row_abs_sum": 19.635435555555556,
+          "mean_diag": 0.8666666666666667
+        },
+        "D5_stitch_five": {
+          "frac_rows_all_zero": 0.016296296296296295,
+          "frac_rows_no_offdiag_info": 0.15555555555555556,
+          "mean_row_abs_sum": 20.846614814814814,
+          "mean_diag": 0.8666666666666667
+        },
+        "D6_mol2vec_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 620.5168361818658,
+          "mean_diag": 1.0
+        },
+        "D7_target_cos": {
+          "frac_rows_all_zero": 0.0962962962962963,
+          "frac_rows_no_offdiag_info": 0.18518518518518517,
+          "mean_row_abs_sum": 7.7284404353566245,
+          "mean_diag": 0.9037037037037037
+        },
+        "D8_fingerprint": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.002962962962962963,
+          "mean_row_abs_sum": 185.77607228519446,
+          "mean_diag": 1.0
+        },
+        "D9_profile_freq_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 151.68057425190878,
+          "mean_diag": 1.0
+        },
+        "D10_profile_bin_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 142.45880041497355,
+          "mean_diag": 1.0
+        },
+        "D11_pathway_enzyme": {
+          "frac_rows_all_zero": 0.7585185185185185,
+          "frac_rows_no_offdiag_info": 0.7837037037037037,
+          "mean_row_abs_sum": 1.9899404946967394,
+          "mean_diag": 0.23037037037037036
+        }
+      },
+      "D9_train_rows_cols_testdrugs_all_zero": true,
+      "ses_without_any_train_pair": [],
+      "se_views_all_ses": {
+        "S1_adrecs_semantic": {
+          "frac_rows_all_zero": 0.005030181086519115,
+          "frac_rows_no_offdiag_info": 0.005030181086519115,
+          "mean_row_abs_sum": 10.707482034278367,
+          "mean_diag": 0.9949698189134809
+        },
+        "S2_glove_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 215.10639565947707,
+          "mean_diag": 1.0
+        },
+        "S3_profile_freq_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 114.89509697712641,
+          "mean_diag": 1.0
+        },
+        "S4_profile_bin_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 132.94123935958217,
+          "mean_diag": 1.0
+        }
+      },
+      "n_test_pairs_whose_SE_has_no_train_pair": 0,
+      "n_test_ses": 751,
+      "MGPred_test_drugs_missing_from_u_adj": 75,
+      "SDPred_train_negatives_with_test_drug": 3243,
+      "SDPred_test_negatives_with_train_drug": 3392,
+      "SDPred_n_train_neg": 33290,
+      "SDPred_n_test_neg": 3781
+    },
+    "5": {
+      "n_test_drugs": 75,
+      "test_rows_in_masked_matrix_all_zero": true,
+      "unmatched_drugs_in_test": [
+        11,
+        114,
+        276,
+        323,
+        341,
+        373,
+        380,
+        502,
+        508,
+        709
+      ],
+      "drug_views_test": {
+        "D1_stitch_one": {
+          "frac_rows_all_zero": 0.06666666666666667,
+          "frac_rows_no_offdiag_info": 0.5733333333333334,
+          "mean_row_abs_sum": 1.717266666666667,
+          "mean_diag": 0.8933333333333333
+        },
+        "D2_stitch_two": {
+          "frac_rows_all_zero": 0.08,
+          "frac_rows_no_offdiag_info": 0.3466666666666667,
+          "mean_row_abs_sum": 3.116106666666666,
+          "mean_diag": 0.8933333333333333
+        },
+        "D3_stitch_three": {
+          "frac_rows_all_zero": 0.10666666666666667,
+          "frac_rows_no_offdiag_info": 0.96,
+          "mean_row_abs_sum": 1.0506666666666669,
+          "mean_diag": 0.8933333333333333
+        },
+        "D4_stitch_four": {
+          "frac_rows_all_zero": 0.013333333333333334,
+          "frac_rows_no_offdiag_info": 0.16,
+          "mean_row_abs_sum": 21.927973333333334,
+          "mean_diag": 0.8933333333333333
+        },
+        "D5_stitch_five": {
+          "frac_rows_all_zero": 0.013333333333333334,
+          "frac_rows_no_offdiag_info": 0.13333333333333333,
+          "mean_row_abs_sum": 23.21128,
+          "mean_diag": 0.8933333333333333
+        },
+        "D6_mol2vec_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 617.1492320323142,
+          "mean_diag": 1.0
+        },
+        "D7_target_cos": {
+          "frac_rows_all_zero": 0.04,
+          "frac_rows_no_offdiag_info": 0.16,
+          "mean_row_abs_sum": 5.951266782839736,
+          "mean_diag": 0.96
+        },
+        "D8_fingerprint": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 178.8357566890307,
+          "mean_diag": 1.0
+        },
+        "D9_profile_freq_cos": {
+          "frac_rows_all_zero": 1.0,
+          "frac_rows_no_offdiag_info": 1.0,
+          "mean_row_abs_sum": 0.0,
+          "mean_diag": 0.0
+        },
+        "D10_profile_bin_cos": {
+          "frac_rows_all_zero": 1.0,
+          "frac_rows_no_offdiag_info": 1.0,
+          "mean_row_abs_sum": 0.0,
+          "mean_diag": 0.0
+        },
+        "D11_pathway_enzyme": {
+          "frac_rows_all_zero": 0.8133333333333334,
+          "frac_rows_no_offdiag_info": 0.8133333333333334,
+          "mean_row_abs_sum": 1.303709202410978,
+          "mean_diag": 0.18666666666666668
+        }
+      },
+      "drug_views_train": {
+        "D1_stitch_one": {
+          "frac_rows_all_zero": 0.08444444444444445,
+          "frac_rows_no_offdiag_info": 0.5525925925925926,
+          "mean_row_abs_sum": 1.7101644444444446,
+          "mean_diag": 0.8711111111111111
+        },
+        "D2_stitch_two": {
+          "frac_rows_all_zero": 0.08148148148148149,
+          "frac_rows_no_offdiag_info": 0.4,
+          "mean_row_abs_sum": 3.0966518518518513,
+          "mean_diag": 0.8711111111111111
+        },
+        "D3_stitch_three": {
+          "frac_rows_all_zero": 0.1259259259259259,
+          "frac_rows_no_offdiag_info": 0.9644444444444444,
+          "mean_row_abs_sum": 0.9395555555555556,
+          "mean_diag": 0.8711111111111111
+        },
+        "D4_stitch_four": {
+          "frac_rows_all_zero": 0.017777777777777778,
+          "frac_rows_no_offdiag_info": 0.16592592592592592,
+          "mean_row_abs_sum": 19.981576296296296,
+          "mean_diag": 0.8711111111111111
+        },
+        "D5_stitch_five": {
+          "frac_rows_all_zero": 0.016296296296296295,
+          "frac_rows_no_offdiag_info": 0.14962962962962964,
+          "mean_row_abs_sum": 21.17093037037037,
+          "mean_diag": 0.8711111111111111
+        },
+        "D6_mol2vec_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 620.7829836184136,
+          "mean_diag": 1.0
+        },
+        "D7_target_cos": {
+          "frac_rows_all_zero": 0.09777777777777778,
+          "frac_rows_no_offdiag_info": 0.18074074074074073,
+          "mean_row_abs_sum": 8.19936614679574,
+          "mean_diag": 0.9022222222222223
+        },
+        "D8_fingerprint": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.002962962962962963,
+          "mean_row_abs_sum": 186.16418797630953,
+          "mean_diag": 1.0
+        },
+        "D9_profile_freq_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 150.99883592312852,
+          "mean_diag": 1.0
+        },
+        "D10_profile_bin_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 141.80720263488828,
+          "mean_diag": 1.0
+        },
+        "D11_pathway_enzyme": {
+          "frac_rows_all_zero": 0.7496296296296296,
+          "frac_rows_no_offdiag_info": 0.7762962962962963,
+          "mean_row_abs_sum": 2.1389733912836433,
+          "mean_diag": 0.23851851851851852
+        }
+      },
+      "D9_train_rows_cols_testdrugs_all_zero": true,
+      "ses_without_any_train_pair": [],
+      "se_views_all_ses": {
+        "S1_adrecs_semantic": {
+          "frac_rows_all_zero": 0.005030181086519115,
+          "frac_rows_no_offdiag_info": 0.005030181086519115,
+          "mean_row_abs_sum": 10.707482034278367,
+          "mean_diag": 0.9949698189134809
+        },
+        "S2_glove_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 215.10639565947707,
+          "mean_diag": 1.0
+        },
+        "S3_profile_freq_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 106.93202321515827,
+          "mean_diag": 1.0
+        },
+        "S4_profile_bin_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 122.10851163322984,
+          "mean_diag": 1.0
+        }
+      },
+      "n_test_pairs_whose_SE_has_no_train_pair": 0,
+      "n_test_ses": 822,
+      "MGPred_test_drugs_missing_from_u_adj": 75,
+      "SDPred_train_negatives_with_test_drug": 3211,
+      "SDPred_test_negatives_with_train_drug": 3758,
+      "SDPred_n_train_neg": 32906,
+      "SDPred_n_test_neg": 4165
+    },
+    "6": {
+      "n_test_drugs": 75,
+      "test_rows_in_masked_matrix_all_zero": true,
+      "unmatched_drugs_in_test": [
+        28,
+        53,
+        185,
+        351,
+        381,
+        486,
+        639,
+        651,
+        718,
+        722
+      ],
+      "drug_views_test": {
+        "D1_stitch_one": {
+          "frac_rows_all_zero": 0.12,
+          "frac_rows_no_offdiag_info": 0.5733333333333334,
+          "mean_row_abs_sum": 1.6008,
+          "mean_diag": 0.84
+        },
+        "D2_stitch_two": {
+          "frac_rows_all_zero": 0.08,
+          "frac_rows_no_offdiag_info": 0.3466666666666667,
+          "mean_row_abs_sum": 3.287053333333333,
+          "mean_diag": 0.84
+        },
+        "D3_stitch_three": {
+          "frac_rows_all_zero": 0.16,
+          "frac_rows_no_offdiag_info": 1.0,
+          "mean_row_abs_sum": 0.84,
+          "mean_diag": 0.84
+        },
+        "D4_stitch_four": {
+          "frac_rows_all_zero": 0.013333333333333334,
+          "frac_rows_no_offdiag_info": 0.16,
+          "mean_row_abs_sum": 19.374826666666667,
+          "mean_diag": 0.84
+        },
+        "D5_stitch_five": {
+          "frac_rows_all_zero": 0.013333333333333334,
+          "frac_rows_no_offdiag_info": 0.13333333333333333,
+          "mean_row_abs_sum": 20.65512,
+          "mean_diag": 0.84
+        },
+        "D6_mol2vec_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 623.8122272335688,
+          "mean_diag": 1.0
+        },
+        "D7_target_cos": {
+          "frac_rows_all_zero": 0.12,
+          "frac_rows_no_offdiag_info": 0.21333333333333335,
+          "mean_row_abs_sum": 7.363228311701908,
+          "mean_diag": 0.88
+        },
+        "D8_fingerprint": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 191.0767001265736,
+          "mean_diag": 1.0
+        },
+        "D9_profile_freq_cos": {
+          "frac_rows_all_zero": 1.0,
+          "frac_rows_no_offdiag_info": 1.0,
+          "mean_row_abs_sum": 0.0,
+          "mean_diag": 0.0
+        },
+        "D10_profile_bin_cos": {
+          "frac_rows_all_zero": 1.0,
+          "frac_rows_no_offdiag_info": 1.0,
+          "mean_row_abs_sum": 0.0,
+          "mean_diag": 0.0
+        },
+        "D11_pathway_enzyme": {
+          "frac_rows_all_zero": 0.72,
+          "frac_rows_no_offdiag_info": 0.7466666666666667,
+          "mean_row_abs_sum": 2.7172746839353303,
+          "mean_diag": 0.26666666666666666
+        }
+      },
+      "drug_views_train": {
+        "D1_stitch_one": {
+          "frac_rows_all_zero": 0.07851851851851852,
+          "frac_rows_no_offdiag_info": 0.5525925925925926,
+          "mean_row_abs_sum": 1.7231051851851853,
+          "mean_diag": 0.8770370370370371
+        },
+        "D2_stitch_two": {
+          "frac_rows_all_zero": 0.08148148148148149,
+          "frac_rows_no_offdiag_info": 0.4,
+          "mean_row_abs_sum": 3.0776577777777776,
+          "mean_diag": 0.8770370370370371
+        },
+        "D3_stitch_three": {
+          "frac_rows_all_zero": 0.12,
+          "frac_rows_no_offdiag_info": 0.96,
+          "mean_row_abs_sum": 0.9629629629629629,
+          "mean_diag": 0.8770370370370371
+        },
+        "D4_stitch_four": {
+          "frac_rows_all_zero": 0.017777777777777778,
+          "frac_rows_no_offdiag_info": 0.16592592592592592,
+          "mean_row_abs_sum": 20.26525925925926,
+          "mean_diag": 0.8770370370370371
+        },
+        "D5_stitch_five": {
+          "frac_rows_all_zero": 0.016296296296296295,
+          "frac_rows_no_offdiag_info": 0.14962962962962964,
+          "mean_row_abs_sum": 21.454948148148148,
+          "mean_diag": 0.8770370370370371
+        },
+        "D6_mol2vec_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 620.0426508182741,
+          "mean_diag": 1.0
+        },
+        "D7_target_cos": {
+          "frac_rows_all_zero": 0.08888888888888889,
+          "frac_rows_no_offdiag_info": 0.1748148148148148,
+          "mean_row_abs_sum": 8.04248153247772,
+          "mean_diag": 0.9111111111111111
+        },
+        "D8_fingerprint": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.002962962962962963,
+          "mean_row_abs_sum": 184.80408314991593,
+          "mean_diag": 1.0
+        },
+        "D9_profile_freq_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 149.67032951029006,
+          "mean_diag": 1.0
+        },
+        "D10_profile_bin_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 140.47197237412252,
+          "mean_diag": 1.0
+        },
+        "D11_pathway_enzyme": {
+          "frac_rows_all_zero": 0.76,
+          "frac_rows_no_offdiag_info": 0.7837037037037037,
+          "mean_row_abs_sum": 1.9819105600031597,
+          "mean_diag": 0.22962962962962963
+        }
+      },
+      "D9_train_rows_cols_testdrugs_all_zero": true,
+      "ses_without_any_train_pair": [],
+      "se_views_all_ses": {
+        "S1_adrecs_semantic": {
+          "frac_rows_all_zero": 0.005030181086519115,
+          "frac_rows_no_offdiag_info": 0.005030181086519115,
+          "mean_row_abs_sum": 10.707482034278367,
+          "mean_diag": 0.9949698189134809
+        },
+        "S2_glove_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 215.10639565947707,
+          "mean_diag": 1.0
+        },
+        "S3_profile_freq_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 111.84195209433227,
+          "mean_diag": 1.0
+        },
+        "S4_profile_bin_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 130.31292491488048,
+          "mean_diag": 1.0
+        }
+      },
+      "n_test_pairs_whose_SE_has_no_train_pair": 0,
+      "n_test_ses": 759,
+      "MGPred_test_drugs_missing_from_u_adj": 75,
+      "SDPred_train_negatives_with_test_drug": 3281,
+      "SDPred_test_negatives_with_train_drug": 3603,
+      "SDPred_n_train_neg": 33046,
+      "SDPred_n_test_neg": 4025
+    },
+    "7": {
+      "n_test_drugs": 75,
+      "test_rows_in_masked_matrix_all_zero": true,
+      "unmatched_drugs_in_test": [
+        0,
+        76,
+        90,
+        109,
+        178,
+        215,
+        228,
+        441,
+        474,
+        510,
+        565,
+        624,
+        633,
+        653,
+        701,
+        702
+      ],
+      "drug_views_test": {
+        "D1_stitch_one": {
+          "frac_rows_all_zero": 0.08,
+          "frac_rows_no_offdiag_info": 0.6,
+          "mean_row_abs_sum": 1.74452,
+          "mean_diag": 0.88
+        },
+        "D2_stitch_two": {
+          "frac_rows_all_zero": 0.08,
+          "frac_rows_no_offdiag_info": 0.44,
+          "mean_row_abs_sum": 2.790466666666667,
+          "mean_diag": 0.88
+        },
+        "D3_stitch_three": {
+          "frac_rows_all_zero": 0.12,
+          "frac_rows_no_offdiag_info": 0.9733333333333334,
+          "mean_row_abs_sum": 0.94,
+          "mean_diag": 0.88
+        },
+        "D4_stitch_four": {
+          "frac_rows_all_zero": 0.02666666666666667,
+          "frac_rows_no_offdiag_info": 0.24,
+          "mean_row_abs_sum": 18.5206,
+          "mean_diag": 0.88
+        },
+        "D5_stitch_five": {
+          "frac_rows_all_zero": 0.02666666666666667,
+          "frac_rows_no_offdiag_info": 0.21333333333333335,
+          "mean_row_abs_sum": 19.499413333333337,
+          "mean_diag": 0.88
+        },
+        "D6_mol2vec_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 621.425495522484,
+          "mean_diag": 1.0
+        },
+        "D7_target_cos": {
+          "frac_rows_all_zero": 0.08,
+          "frac_rows_no_offdiag_info": 0.24,
+          "mean_row_abs_sum": 7.911471609799131,
+          "mean_diag": 0.92
+        },
+        "D8_fingerprint": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 193.43684893347228,
+          "mean_diag": 1.0
+        },
+        "D9_profile_freq_cos": {
+          "frac_rows_all_zero": 1.0,
+          "frac_rows_no_offdiag_info": 1.0,
+          "mean_row_abs_sum": 0.0,
+          "mean_diag": 0.0
+        },
+        "D10_profile_bin_cos": {
+          "frac_rows_all_zero": 1.0,
+          "frac_rows_no_offdiag_info": 1.0,
+          "mean_row_abs_sum": 0.0,
+          "mean_diag": 0.0
+        },
+        "D11_pathway_enzyme": {
+          "frac_rows_all_zero": 0.6933333333333334,
+          "frac_rows_no_offdiag_info": 0.6933333333333334,
+          "mean_row_abs_sum": 3.0694972467837744,
+          "mean_diag": 0.30666666666666664
+        }
+      },
+      "drug_views_train": {
+        "D1_stitch_one": {
+          "frac_rows_all_zero": 0.08296296296296296,
+          "frac_rows_no_offdiag_info": 0.5496296296296296,
+          "mean_row_abs_sum": 1.7071362962962964,
+          "mean_diag": 0.8725925925925926
+        },
+        "D2_stitch_two": {
+          "frac_rows_all_zero": 0.08148148148148149,
+          "frac_rows_no_offdiag_info": 0.3896296296296296,
+          "mean_row_abs_sum": 3.1328340740740734,
+          "mean_diag": 0.8725925925925926
+        },
+        "D3_stitch_three": {
+          "frac_rows_all_zero": 0.12444444444444444,
+          "frac_rows_no_offdiag_info": 0.9629629629629629,
+          "mean_row_abs_sum": 0.9518518518518518,
+          "mean_diag": 0.8725925925925926
+        },
+        "D4_stitch_four": {
+          "frac_rows_all_zero": 0.016296296296296295,
+          "frac_rows_no_offdiag_info": 0.15703703703703703,
+          "mean_row_abs_sum": 20.360173333333332,
+          "mean_diag": 0.8725925925925926
+        },
+        "D5_stitch_five": {
+          "frac_rows_all_zero": 0.014814814814814815,
+          "frac_rows_no_offdiag_info": 0.14074074074074075,
+          "mean_row_abs_sum": 21.58336,
+          "mean_diag": 0.8725925925925926
+        },
+        "D6_mol2vec_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 620.307843230617,
+          "mean_diag": 1.0
+        },
+        "D7_target_cos": {
+          "frac_rows_all_zero": 0.09333333333333334,
+          "frac_rows_no_offdiag_info": 0.17185185185185184,
+          "mean_row_abs_sum": 7.981565610466916,
+          "mean_diag": 0.9066666666666666
+        },
+        "D8_fingerprint": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.002962962962962963,
+          "mean_row_abs_sum": 184.54184439359383,
+          "mean_diag": 1.0
+        },
+        "D9_profile_freq_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 149.6529952806277,
+          "mean_diag": 1.0
+        },
+        "D10_profile_bin_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 140.3127559239042,
+          "mean_diag": 1.0
+        },
+        "D11_pathway_enzyme": {
+          "frac_rows_all_zero": 0.762962962962963,
+          "frac_rows_no_offdiag_info": 0.7896296296296297,
+          "mean_row_abs_sum": 1.9427747196866658,
+          "mean_diag": 0.22518518518518518
+        }
+      },
+      "D9_train_rows_cols_testdrugs_all_zero": true,
+      "ses_without_any_train_pair": [],
+      "se_views_all_ses": {
+        "S1_adrecs_semantic": {
+          "frac_rows_all_zero": 0.005030181086519115,
+          "frac_rows_no_offdiag_info": 0.005030181086519115,
+          "mean_row_abs_sum": 10.707482034278367,
+          "mean_diag": 0.9949698189134809
+        },
+        "S2_glove_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 215.10639565947707,
+          "mean_diag": 1.0
+        },
+        "S3_profile_freq_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 113.43441204565826,
+          "mean_diag": 1.0
+        },
+        "S4_profile_bin_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 130.67231413016594,
+          "mean_diag": 1.0
+        }
+      },
+      "n_test_pairs_whose_SE_has_no_train_pair": 0,
+      "n_test_ses": 693,
+      "MGPred_test_drugs_missing_from_u_adj": 75,
+      "SDPred_train_negatives_with_test_drug": 3482,
+      "SDPred_test_negatives_with_train_drug": 2960,
+      "SDPred_n_train_neg": 33797,
+      "SDPred_n_test_neg": 3274
+    },
+    "8": {
+      "n_test_drugs": 75,
+      "test_rows_in_masked_matrix_all_zero": true,
+      "unmatched_drugs_in_test": [
+        19,
+        21,
+        22,
+        24,
+        97,
+        287,
+        368,
+        469,
+        482,
+        664,
+        682,
+        711,
+        717,
+        719
+      ],
+      "drug_views_test": {
+        "D1_stitch_one": {
+          "frac_rows_all_zero": 0.06666666666666667,
+          "frac_rows_no_offdiag_info": 0.6533333333333333,
+          "mean_row_abs_sum": 1.5765200000000001,
+          "mean_diag": 0.88
+        },
+        "D2_stitch_two": {
+          "frac_rows_all_zero": 0.05333333333333334,
+          "frac_rows_no_offdiag_info": 0.37333333333333335,
+          "mean_row_abs_sum": 3.0700666666666665,
+          "mean_diag": 0.88
+        },
+        "D3_stitch_three": {
+          "frac_rows_all_zero": 0.12,
+          "frac_rows_no_offdiag_info": 0.9733333333333334,
+          "mean_row_abs_sum": 0.9520000000000001,
+          "mean_diag": 0.88
+        },
+        "D4_stitch_four": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.18666666666666668,
+          "mean_row_abs_sum": 19.08,
+          "mean_diag": 0.88
+        },
+        "D5_stitch_five": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.18666666666666668,
+          "mean_row_abs_sum": 20.27112,
+          "mean_diag": 0.88
+        },
+        "D6_mol2vec_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 618.8513148033175,
+          "mean_diag": 1.0
+        },
+        "D7_target_cos": {
+          "frac_rows_all_zero": 0.06666666666666667,
+          "frac_rows_no_offdiag_info": 0.18666666666666668,
+          "mean_row_abs_sum": 7.666029192786902,
+          "mean_diag": 0.9333333333333333
+        },
+        "D8_fingerprint": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 176.67434107209218,
+          "mean_diag": 1.0
+        },
+        "D9_profile_freq_cos": {
+          "frac_rows_all_zero": 1.0,
+          "frac_rows_no_offdiag_info": 1.0,
+          "mean_row_abs_sum": 0.0,
+          "mean_diag": 0.0
+        },
+        "D10_profile_bin_cos": {
+          "frac_rows_all_zero": 1.0,
+          "frac_rows_no_offdiag_info": 1.0,
+          "mean_row_abs_sum": 0.0,
+          "mean_diag": 0.0
+        },
+        "D11_pathway_enzyme": {
+          "frac_rows_all_zero": 0.8,
+          "frac_rows_no_offdiag_info": 0.8133333333333334,
+          "mean_row_abs_sum": 1.511335725740255,
+          "mean_diag": 0.19333333333333333
+        }
+      },
+      "drug_views_train": {
+        "D1_stitch_one": {
+          "frac_rows_all_zero": 0.08444444444444445,
+          "frac_rows_no_offdiag_info": 0.5437037037037037,
+          "mean_row_abs_sum": 1.7258029629629628,
+          "mean_diag": 0.8725925925925926
+        },
+        "D2_stitch_two": {
+          "frac_rows_all_zero": 0.08444444444444445,
+          "frac_rows_no_offdiag_info": 0.397037037037037,
+          "mean_row_abs_sum": 3.1017674074074075,
+          "mean_diag": 0.8725925925925926
+        },
+        "D3_stitch_three": {
+          "frac_rows_all_zero": 0.12444444444444444,
+          "frac_rows_no_offdiag_info": 0.9629629629629629,
+          "mean_row_abs_sum": 0.9505185185185184,
+          "mean_diag": 0.8725925925925926
+        },
+        "D4_stitch_four": {
+          "frac_rows_all_zero": 0.01925925925925926,
+          "frac_rows_no_offdiag_info": 0.16296296296296298,
+          "mean_row_abs_sum": 20.29801777777778,
+          "mean_diag": 0.8725925925925926
+        },
+        "D5_stitch_five": {
+          "frac_rows_all_zero": 0.017777777777777778,
+          "frac_rows_no_offdiag_info": 0.1437037037037037,
+          "mean_row_abs_sum": 21.497614814814813,
+          "mean_diag": 0.8725925925925926
+        },
+        "D6_mol2vec_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 620.5938633105243,
+          "mean_diag": 1.0
+        },
+        "D7_target_cos": {
+          "frac_rows_all_zero": 0.09481481481481481,
+          "frac_rows_no_offdiag_info": 0.17777777777777778,
+          "mean_row_abs_sum": 8.008836990134942,
+          "mean_diag": 0.9051851851851852
+        },
+        "D8_fingerprint": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.002962962962962963,
+          "mean_row_abs_sum": 186.40434526708052,
+          "mean_diag": 1.0
+        },
+        "D9_profile_freq_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 148.80937742485872,
+          "mean_diag": 1.0
+        },
+        "D10_profile_bin_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 139.37351348919893,
+          "mean_diag": 1.0
+        },
+        "D11_pathway_enzyme": {
+          "frac_rows_all_zero": 0.7511111111111111,
+          "frac_rows_no_offdiag_info": 0.7762962962962963,
+          "mean_row_abs_sum": 2.11590377758039,
+          "mean_diag": 0.23777777777777778
+        }
+      },
+      "D9_train_rows_cols_testdrugs_all_zero": true,
+      "ses_without_any_train_pair": [],
+      "se_views_all_ses": {
+        "S1_adrecs_semantic": {
+          "frac_rows_all_zero": 0.005030181086519115,
+          "frac_rows_no_offdiag_info": 0.005030181086519115,
+          "mean_row_abs_sum": 10.707482034278367,
+          "mean_diag": 0.9949698189134809
+        },
+        "S2_glove_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 215.10639565947707,
+          "mean_diag": 1.0
+        },
+        "S3_profile_freq_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 116.38705334710222,
+          "mean_diag": 1.0
+        },
+        "S4_profile_bin_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 135.3647248626736,
+          "mean_diag": 1.0
+        }
+      },
+      "n_test_pairs_whose_SE_has_no_train_pair": 0,
+      "n_test_ses": 679,
+      "MGPred_test_drugs_missing_from_u_adj": 75,
+      "SDPred_train_negatives_with_test_drug": 3423,
+      "SDPred_test_negatives_with_train_drug": 2923,
+      "SDPred_n_train_neg": 33805,
+      "SDPred_n_test_neg": 3266
+    },
+    "9": {
+      "n_test_drugs": 75,
+      "test_rows_in_masked_matrix_all_zero": true,
+      "unmatched_drugs_in_test": [
+        135,
+        259,
+        264,
+        266,
+        446,
+        548,
+        632,
+        644,
+        675,
+        721,
+        740
+      ],
+      "drug_views_test": {
+        "D1_stitch_one": {
+          "frac_rows_all_zero": 0.09333333333333334,
+          "frac_rows_no_offdiag_info": 0.44,
+          "mean_row_abs_sum": 1.9011733333333336,
+          "mean_diag": 0.8666666666666667
+        },
+        "D2_stitch_two": {
+          "frac_rows_all_zero": 0.09333333333333334,
+          "frac_rows_no_offdiag_info": 0.36,
+          "mean_row_abs_sum": 3.42024,
+          "mean_diag": 0.8666666666666667
+        },
+        "D3_stitch_three": {
+          "frac_rows_all_zero": 0.13333333333333333,
+          "frac_rows_no_offdiag_info": 0.96,
+          "mean_row_abs_sum": 0.9039999999999999,
+          "mean_diag": 0.8666666666666667
+        },
+        "D4_stitch_four": {
+          "frac_rows_all_zero": 0.02666666666666667,
+          "frac_rows_no_offdiag_info": 0.21333333333333335,
+          "mean_row_abs_sum": 20.28745333333333,
+          "mean_diag": 0.8666666666666667
+        },
+        "D5_stitch_five": {
+          "frac_rows_all_zero": 0.02666666666666667,
+          "frac_rows_no_offdiag_info": 0.14666666666666667,
+          "mean_row_abs_sum": 21.64181333333333,
+          "mean_diag": 0.8666666666666667
+        },
+        "D6_mol2vec_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 628.0607571286907,
+          "mean_diag": 1.0
+        },
+        "D7_target_cos": {
+          "frac_rows_all_zero": 0.04,
+          "frac_rows_no_offdiag_info": 0.09333333333333334,
+          "mean_row_abs_sum": 8.52402434388481,
+          "mean_diag": 0.96
+        },
+        "D8_fingerprint": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 196.9108181920014,
+          "mean_diag": 1.0
+        },
+        "D9_profile_freq_cos": {
+          "frac_rows_all_zero": 1.0,
+          "frac_rows_no_offdiag_info": 1.0,
+          "mean_row_abs_sum": 0.0,
+          "mean_diag": 0.0
+        },
+        "D10_profile_bin_cos": {
+          "frac_rows_all_zero": 1.0,
+          "frac_rows_no_offdiag_info": 1.0,
+          "mean_row_abs_sum": 0.0,
+          "mean_diag": 0.0
+        },
+        "D11_pathway_enzyme": {
+          "frac_rows_all_zero": 0.76,
+          "frac_rows_no_offdiag_info": 0.7866666666666666,
+          "mean_row_abs_sum": 2.4173172412056982,
+          "mean_diag": 0.22666666666666666
+        }
+      },
+      "drug_views_train": {
+        "D1_stitch_one": {
+          "frac_rows_all_zero": 0.08148148148148149,
+          "frac_rows_no_offdiag_info": 0.5674074074074074,
+          "mean_row_abs_sum": 1.6897303703703703,
+          "mean_diag": 0.8740740740740741
+        },
+        "D2_stitch_two": {
+          "frac_rows_all_zero": 0.08,
+          "frac_rows_no_offdiag_info": 0.3985185185185185,
+          "mean_row_abs_sum": 3.062859259259259,
+          "mean_diag": 0.8740740740740741
+        },
+        "D3_stitch_three": {
+          "frac_rows_all_zero": 0.12296296296296297,
+          "frac_rows_no_offdiag_info": 0.9644444444444444,
+          "mean_row_abs_sum": 0.955851851851852,
+          "mean_diag": 0.8740740740740741
+        },
+        "D4_stitch_four": {
+          "frac_rows_all_zero": 0.016296296296296295,
+          "frac_rows_no_offdiag_info": 0.16,
+          "mean_row_abs_sum": 20.1638562962963,
+          "mean_diag": 0.8740740740740741
+        },
+        "D5_stitch_five": {
+          "frac_rows_all_zero": 0.014814814814814815,
+          "frac_rows_no_offdiag_info": 0.14814814814814814,
+          "mean_row_abs_sum": 21.34531555555556,
+          "mean_diag": 0.8740740740740741
+        },
+        "D6_mol2vec_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 619.5705919410384,
+          "mean_diag": 1.0
+        },
+        "D7_target_cos": {
+          "frac_rows_all_zero": 0.09777777777777778,
+          "frac_rows_no_offdiag_info": 0.18814814814814815,
+          "mean_row_abs_sum": 7.913504195568507,
+          "mean_diag": 0.9022222222222223
+        },
+        "D8_fingerprint": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.002962962962962963,
+          "mean_row_abs_sum": 184.15584780931283,
+          "mean_diag": 1.0
+        },
+        "D9_profile_freq_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 148.88626160090118,
+          "mean_diag": 1.0
+        },
+        "D10_profile_bin_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 139.8361407165569,
+          "mean_diag": 1.0
+        },
+        "D11_pathway_enzyme": {
+          "frac_rows_all_zero": 0.7555555555555555,
+          "frac_rows_no_offdiag_info": 0.7792592592592592,
+          "mean_row_abs_sum": 2.0152391647508963,
+          "mean_diag": 0.23407407407407407
+        }
+      },
+      "D9_train_rows_cols_testdrugs_all_zero": true,
+      "ses_without_any_train_pair": [],
+      "se_views_all_ses": {
+        "S1_adrecs_semantic": {
+          "frac_rows_all_zero": 0.005030181086519115,
+          "frac_rows_no_offdiag_info": 0.005030181086519115,
+          "mean_row_abs_sum": 10.707482034278367,
+          "mean_diag": 0.9949698189134809
+        },
+        "S2_glove_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 215.10639565947707,
+          "mean_diag": 1.0
+        },
+        "S3_profile_freq_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 112.06915598180017,
+          "mean_diag": 1.0
+        },
+        "S4_profile_bin_cos": {
+          "frac_rows_all_zero": 0.0,
+          "frac_rows_no_offdiag_info": 0.0,
+          "mean_row_abs_sum": 129.64383841953523,
+          "mean_diag": 1.0
+        }
+      },
+      "n_test_pairs_whose_SE_has_no_train_pair": 0,
+      "n_test_ses": 771,
+      "MGPred_test_drugs_missing_from_u_adj": 75,
+      "SDPred_train_negatives_with_test_drug": 3268,
+      "SDPred_test_negatives_with_train_drug": 3622,
+      "SDPred_n_train_neg": 33042,
+      "SDPred_n_test_neg": 4029
+    }
+  }
+}

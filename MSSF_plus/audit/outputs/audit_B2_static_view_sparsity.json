@@ -1,0 +1,96 @@
+{
+  "unmatched_drugs": [
+    617,
+    628
+  ],
+  "dup_rows_in_757": 2,
+  "views": {
+    "D1_stitch_one": {
+      "n_all_zero": 62,
+      "n_no_offdiag": 416,
+      "unmatched_status": {
+        "617": "empty",
+        "628": "empty"
+      }
+    },
+    "D2_stitch_two": {
+      "n_all_zero": 61,
+      "n_no_offdiag": 296,
+      "unmatched_status": {
+        "617": "empty",
+        "628": "empty"
+      }
+    },
+    "D3_stitch_three": {
+      "n_all_zero": 93,
+      "n_no_offdiag": 723,
+      "unmatched_status": {
+        "617": "empty",
+        "628": "empty"
+      }
+    },
+    "D4_stitch_four": {
+      "n_all_zero": 13,
+      "n_no_offdiag": 124,
+      "unmatched_status": {
+        "617": "empty",
+        "628": "empty"
+      }
+    },
+    "D5_stitch_five": {
+      "n_all_zero": 12,
+      "n_no_offdiag": 111,
+      "unmatched_status": {
+        "617": "empty",
+        "628": "empty"
+      }
+    },
+    "D6_mol2vec_cos": {
+      "n_all_zero": 0,
+      "n_no_offdiag": 0,
+      "unmatched_status": {
+        "617": "ok",
+        "628": "ok"
+      }
+    },
+    "D7_target_cos": {
+      "n_all_zero": 69,
+      "n_no_offdiag": 134,
+      "unmatched_status": {
+        "617": "empty",
+        "628": "empty"
+      }
+    },
+    "D8_fingerprint": {
+      "n_all_zero": 0,
+      "n_no_offdiag": 2,
+      "unmatched_status": {
+        "617": "empty",
+        "628": "empty"
+      }
+    },
+    "D11_pathway_enzyme": {
+      "n_all_zero": 567,
+      "n_no_offdiag": 585,
+      "unmatched_status": {
+        "617": "empty",
+        "628": "empty"
+      }
+    }
+  },
+  "hist_n_available_static_views": {
+    "1": 2,
+    "2": 24,
+    "3": 59,
+    "4": 57,
+    "5": 118,
+    "6": 206,
+    "7": 201,
+    "8": 76,
+    "9": 7
+  },
+  "mean_nSE_stitch_missing_vs_present": [
+    38.630630630630634,
+    51.30359937402191
+  ]
+}

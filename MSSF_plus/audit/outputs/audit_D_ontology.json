@@ -1,0 +1,242 @@
+{
+  "alignment_994_SE": {
+    "drug_side_750_equals_shared_drug_side": true,
+    "raw_frequency_750_mat_R_equals_drug_side_750": true,
+    "MSSF_757_equals_SDPred_757": true,
+    "columns_994_aligned_between_750_and_757_on_748_matched_drugs": true
+  },
+  "side_effect_label_750_mat": {
+    "keys": [
+      "node_label",
+      "side_effect"
+    ],
+    "shape": [
+      994,
+      243
+    ],
+    "dtype": "float64",
+    "shared_identical_to_DSGAT": true,
+    "unique_values": [
+      0.0,
+      1.0
+    ],
+    "nnz_per_SE_min_median_mean_max": [
+      2,
+      2.0,
+      2.926559356136821,
+      8
+    ],
+    "n_zero_SE_rows": 0,
+    "zero_SE_rows": [],
+    "n_zero_feature_cols": 0,
+    "zero_feature_cols": [],
+    "cosine_sim_stats": {
+      "shape": [
+        994,
+        994
+      ],
+      "diag_min_max": [
+        0.9999999999999997,
+        1.0000000000000002
+      ],
+      "offdiag_min_mean_std_max": [
+        0.0,
+        0.0476177657292881,
+        0.14669015166026428,
+        1.0000000000000002
+      ],
+      "frac_offdiag_positive": 0.11565060048103323,
+      "pearson_corr_with_S1_adrecs_upper_tri": 0.8725131956496275
+    }
+  },
+  "mvsl_side_vector_level_123": {
+    "orig_shape": [
+      893,
+      243
+    ],
+    "exp_shape": [
+      994,
+      243
+    ],
+    "mvsl_orig_freq_min_max_unique_count": [
+      0.0,
+      5.0,
+      6
+    ],
+    "col_mapping_len": 893,
+    "col_mapping_unique_len": 884,
+    "exact_matches_with_raw_drug_side": 893,
+    "exact_matches_with_div5_drug_side": 0,
+    "exact_matches_with_assoc": 893,
+    "ambiguous_se_cols_count": 18,
+    "ambiguous_se_cols": [
+      [
+        12,
+        [
+          12,
+          823
+        ],
+        []
+      ],
+      [
+        50,
+        [
+          50,
+          51,
+          78
+        ],
+        []
+      ],
+      [
+        51,
+        [
+          50,
+          51,
+          78
+        ],
+        []
+      ],
+      [
+        78,
+        [
+          50,
+          51,
+          78
+        ],
+        []
+      ],
+      [
+        128,
+        [
+          128,
+          469
+        ],
+        []
+      ],
+      [
+        328,
+        [
+          328,
+          329
+        ],
+        []
+      ],
+      [
+        329,
+        [
+          328,
+          329
+        ],
+        []
+      ],
+      [
+        348,
+        [
+          348,
+          594
+        ],
+        []
+      ],
+      [
+        349,
+        [
+          349,
+          517
+        ],
+        []
+      ],
+      [
+        469,
+        [
+          128,
+          469
+        ],
+        []
+      ],
+      [
+        484,
+        [
+          484,
+          864
+        ],
+        []
+      ],
+      [
+        517,
+        [
+          349,
+          517
+        ],
+        []
+      ],
+      [
+        594,
+        [
+          348,
+          594
+        ],
+        []
+      ],
+      [
+        727,
+        [
+          727,
+          728
+        ],
+        []
+      ],
+      [
+        728,
+        [
+          727,
+          728
+        ],
+        []
+      ],
+      [
+        740,
+        [
+          740,
+          949
+        ],
+        []
+      ],
+      [
+        823,
+        [
+          12,
+          823
+        ],
+        []
+      ],
+      [
+        864,
+        [
+          484,
+          864
+        ],
+        []
+      ]
+    ],
+    "mvsl_893_vs_side_effect_label_750_at_col_map_max_diff": 1.0,
+    "mvsl_893_vs_side_effect_label_750_equal_rows": 889,
+    "mvsl_893_rows_found_anywhere_in_side_effect_label_750": 893,
+    "n_missing_SEs_in_mvsl_893": 110,
+    "mvsl_750_994_imputed_missing_101_with_mean": false,
+    "side_effect_label_750_has_real_vectors_for_those_101": 110
+  },
+  "S1_adrecs_semantic": {
+    "shape": [
+      994,
+      994
+    ],
+    "identical_across_shared_mssf750_mssfOrig": true,
+    "zero_rows_in_S1": [
+      154,
+      349,
+      495,
+      533,
+      727
+    ]
+  }
+}

@@ -27,22 +27,31 @@ shared_data/
 ├── drug_side.pkl                  # Ma trận tần suất gốc (750×994)
 ├── drug_SMILES_750.csv            # SMILES cho 750 drugs
 ├── raw_frequency_750.mat          # Frequency matrix (MAT format)
-├── mask_mat_750.mat               # 10-fold masks cho DSGAT/A3Net
+├── mask_mat_750.mat               # 10-fold masks gốc cho DSGAT/A3Net
+├── mask_mat_750_v2_A.mat          # 10-fold masks v2 (che valsel+valcal+test) cho Split A
+├── mask_mat_750_v2_B.mat          # 10-fold masks v2 (che valsel+valcal+test) cho Split B
 ├── side_effect_label_750.mat      # MedDRA features (994×243)
 ├── effect_side_semantic.pkl       # SE semantic similarity (994×994)
 ├── glove_wordEmbedding.pkl        # GloVe 300-D cho 994 SEs
 │
-├── generate_splits.py             # Script tạo splits
-├── split_adapter.py               # API load splits cho notebooks
+├── generate_splits.py             # Script tạo splits gốc (train/test)
+├── generate_val_splits.py         # Script tạo splits_val (train/valsel/valcal = 80/10/10)
+├── split_adapter.py               # API load splits gốc (train, test)
+├── split_adapter_v2.py            # API load splits v2 (train, valsel, valcal, test)
 ├── unified_eval.py                # Script đánh giá thống nhất
 ├── prepare_all_data.py            # Pipeline chuyển đổi data gốc
 │
-├── splits/                        # 50 files split đã tạo sẵn
+├── splits/                        # 50 files split gốc (train + test)
 │   ├── splitA_fold{0-9}_train.npy # Split A: Warm-start (pair-wise)
 │   ├── splitA_fold{0-9}_test.npy
 │   ├── splitB_fold{0-9}_train.npy # Split B: Drug cold-start
 │   ├── splitB_fold{0-9}_test.npy
 │   └── splitB_fold{0-9}_test_drugs.npy
+│
+├── splits_val/                    # 90 files validation splits (chia từ train gốc, seed=42)
+│   ├── splitA_fold{0-9}_{train|valsel|valcal}.npy
+│   ├── splitB_fold{0-9}_{train|valsel|valcal}.npy
+│   └── splitB_fold{0-9}_{train|valsel|valcal}_drugs.npy
 │
 ├── sdpred_750/                    # SDPred data adapted 757→750
 ├── mssf_750/                      # MSSF data adapted 757→750
@@ -56,7 +65,7 @@ shared_data/
 ### `drug_side.pkl` — Ma trận tần suất
 - **Shape**: `(750, 994)`, dtype `float64`
 - **Giá trị**: Số nguyên {0, 1, 2, 3, 4, 5}
-  - `0` = không có tác dụng phụ (unknown/negative)
+  - `0` = chưa quan sát (unobserved — chưa ghi nhận tương tác trong SIDER, **không phải** đã xác nhận âm tính)
   - `1` = very rare (rất hiếm)
   - `2` = rare (hiếm)
   - `3` = infrequent (không thường xuyên)
@@ -76,18 +85,20 @@ shared_data/
 - Nội dung giống `drug_side.pkl` nhưng ở format `.mat`
 - Dùng cho DSGAT và A3Net (code gốc đọc `.mat`)
 
-### `mask_mat_750.mat` — 10-fold binary masks
-- **Keys**: `'mask0'` đến `'mask9'`, mỗi mask shape `(750, 994)`
-- Giá trị: `1` = training pair, `0` = test pair (bị mask)
-- Dùng cho DSGAT và A3Net: `train_freq = R × mask[fold]`
+### `mask_mat_750.mat` & `mask_mat_750_v2_{A|B}.mat` — 10-fold masks
+- `mask_mat_750.mat` (gốc): Keys `'mask0'` đến `'mask9'`, shape `(750, 994)` (`1` = train cũ, `0` = test).
+- `mask_mat_750_v2_A.mat` & `mask_mat_750_v2_B.mat` (protocol v2):
+  - `'mask0'..'mask9'`: `1` cho cặp được phép nhìn thấy khi train (đã che `valsel`, `valcal`, `test`; ở Split B che toàn bộ hàng của thuốc `valsel`, `valcal`, `test`).
+  - `'valsel_mask0'..'valsel_mask9'`, `'valcal_mask0'..'valcal_mask9'`, `'test_mask0'..'test_mask9'`: mặt nạ nhị phân chỉ bật `1` tại các cặp dương thuộc phân vùng tương ứng.
+  - `'partition0'..'partition9'`: mặt nạ 5 trạng thái (`int8`): `0` = chưa quan sát (`R==0`), `1` = `train`, `2` = `valsel`, `3` = `valcal`, `4` = `test`.
 
 ### `side_effect_label_750.mat` — MedDRA features
-- **Key**: `'node_label'`, shape `(994, 243)`
+- **Key**: `'node_label'`, shape `(994, 243)` (nhị phân `{0, 1}`, không có dòng SE nào toàn 0); kèm `'side_effect'` `(994, 1)` chứa tên tiếng Anh của 994 SE.
 - 243-D vector cho mỗi SE dựa trên phân loại MedDRA:
   - Level 1: System Organ Class (SOC) — vd: "Cardiac disorders"
   - Level 2: High-Level Group Term (HLGT)
   - Level 3: High-Level Term (HLT)
-- Dùng làm node features trong SE graph (DSGAT, A3Net)
+- Dùng làm node features trong SE graph (DSGAT, A3Net) và view ontology cho MSSF_plus (khớp 1–1 với 994 SE của MSSF).
 
 ### `effect_side_semantic.pkl` — SE semantic similarity
 - **Shape**: `(994, 994)`, dtype `float64`
@@ -106,25 +117,38 @@ shared_data/
 
 ### Split A: Warm-start (Pair-wise 10-fold CV)
 - Chia 37,071 positive pairs thành 10 folds (StratifiedKFold, seed=42)
-- Mỗi fold: ~33,364 train pairs + ~3,707 test pairs
+- Mỗi fold gốc (`splits/`): ~33,364 train pairs + ~3,707 test pairs
+- Mỗi fold mở rộng (`splits_val/`, seed=42): chia phần train gốc theo tỷ lệ 80/10/10 (stratified theo lớp tần suất) thành:
+  - `train`: 26,690–26,691 cặp (80%)
+  - `valsel` (`val_select` — chọn epoch/siêu tham số): 3,337 cặp (10%)
+  - `valcal` (`val_calib` — hiệu chỉnh conformal prediction): 3,336 cặp (10%)
+  - `test` (giữ nguyên từ `splits/`): 3,707–3,708 cặp
 - File format: `(N, 3)` numpy array: `[drug_idx, se_idx, frequency]`
 - **Tất cả drugs đều xuất hiện trong cả train lẫn test** → model đã "thấy" mọi drug
 
 ### Split B: Drug cold-start (Drug-level 10-fold CV)
 - Chia 750 drugs thành 10 groups (~75 drugs/group)
-- Test: tất cả positive pairs của 75 drugs held-out
-- Train: tất cả positive pairs của 675 drugs còn lại
-- `test_drugs.npy`: danh sách 75 drug indices bị held-out
-- **Test drugs hoàn toàn mới** → model chưa từng "thấy" drug này khi train
+- Test (`splits/`): tất cả positive pairs của 75 drugs held-out (`test_drugs.npy`)
+- Train gốc (`splits/`): tất cả positive pairs của 675 drugs còn lại
+- Mở rộng (`splits_val/`, seed=42): chia 675 thuốc train theo THUỐC (stratified theo phân vị số SE đã biết của thuốc trong train gốc) thành 80/10/10:
+  - `train`: **540 thuốc** (`train_drugs.npy`, 25,925–26,884 cặp)
+  - `valsel`: **67 thuốc** (`valsel_drugs.npy`, 2,918–3,912 cặp)
+  - `valcal`: **68 thuốc** (`valcal_drugs.npy`, 3,084–3,854 cặp)
+  - `test`: **75 thuốc** (`test_drugs.npy` trong `splits/`, 3,266–4,165 cặp)
+- **Thuốc trong `valsel`, `valcal`, và `test` đều được xử lý như cold-start** (profile = 0 khi dựng feature chỉ từ 540 thuốc `train`).
 
 ### Cách load trong code:
 ```python
+# Protocol gốc (2 tập: train, test)
 from split_adapter import load_splits, load_test_drugs
-
 train_data, test_data = load_splits(fold=0, split_type='A')
-# train_data shape: (N_train, 3) = [drug_idx, se_idx, freq]
-
 test_drugs = load_test_drugs(fold=0)  # chỉ cho Split B
+
+# Protocol v2 (4 tập: train, valsel, valcal, test)
+from split_adapter_v2 import load_splits_v2, load_val_drugs, make_train_only_freq
+train, valsel, valcal, test = load_splits_v2(fold=0, split_type='B')
+valsel_drugs = load_val_drugs(fold=0, part='valsel')  # 'train' | 'valsel' | 'valcal' | 'test'
+drug_side_train = make_train_only_freq(train)         # (750, 994) chỉ điền từ tập train (80%)
 ```
 
 ---
@@ -166,9 +190,9 @@ MVSL-DSF gốc chỉ dùng 893 SEs. Thư mục này mở rộng lên 994:
 | `drug_side_association_matrix.pkl` | `(750, 994)` | Binary association matrix {0,1} |
 | `drug_side_frequency_matrix.pkl` | `(750, 994)` | Normalized frequency [0, 1] (= freq_gốc / 5) |
 | `drug_smiles.pkl` | 750 items | List of `[drug_idx, SMILES_string]` |
-| `side_vector_level_123.pkl` | `(994, 243)` | MedDRA vectors (101 SEs mới = mean imputation) |
+| `side_vector_level_123.pkl` | `(994, 243)` | MedDRA vectors (**110 SEs** bị điền mean imputation do 9 cặp cột trong 893 SE trùng profile tần suất nên va chạm ánh xạ về 884 chỉ số duy nhất; khi cần MedDRA đầy đủ cho 994 SE, dùng `side_effect_label_750.mat['node_label']`) |
 | `final_sample.pkl` | `(N, 4)` | `[drug_idx, se_idx, assoc_label, freq_value]` |
-| `col_mapping_893_to_994.npy` | `(893,)` | Ánh xạ cột: vị trí 893 SE gốc trong 994 SEs |
+| `col_mapping_893_to_994.npy` | `(893,)` | Ánh xạ cột: vị trí 893 SE gốc trong 994 SEs (chứa 884 giá trị duy nhất) |
 
 **Lưu ý**: `drug_side_frequency_matrix.pkl` đã normalize /5.0 (giá trị [0,1]), khác với `drug_side.pkl` gốc (giá trị {0-5}).
 
@@ -176,25 +200,21 @@ MVSL-DSF gốc chỉ dùng 893 SEs. Thư mục này mở rộng lên 994:
 
 ## Scripts
 
-### `generate_splits.py`
-Tạo tất cả 50 split files. Chạy 1 lần duy nhất:
-```bash
-python generate_splits.py
-```
+### `generate_splits.py` & `generate_val_splits.py`
+- `python generate_splits.py`: tạo 50 split files gốc trong `splits/`.
+- `python generate_val_splits.py`: tạo 90 validation split files trong `splits_val/` cùng 2 file mask `mask_mat_750_v2_{A|B}.mat` và chạy kiểm chứng tự động.
 
-### `split_adapter.py`
-API trung gian giúp notebooks load splits đúng format cho từng model:
-- `load_splits(fold, split_type)` → `(train_data, test_data)`
-- `load_test_drugs(fold)` → test drug indices (Split B)
-- `save_mask_mat(freq, split_type, n_folds, path)` → tạo mask .mat cho DSGAT/A3Net
-- `make_masked_freq(freq, fold, split_type)` → zero-out test pairs trong frequency matrix
+### `split_adapter.py` & `split_adapter_v2.py`
+- `split_adapter.py`: giữ nguyên tuyệt đối cho các notebook cũ (`load_splits`, `load_test_drugs`, `save_mask_mat`, `make_masked_freq`).
+- `split_adapter_v2.py`: tái xuất toàn bộ hàm của `split_adapter.py` và bổ sung `load_splits_v2(fold, split_type)`, `load_val_drugs(fold, part)`, `make_train_only_freq(train_data)`, `make_split_masks_v2(...)`, `save_mask_mat_v2(...)`.
 
 ### `unified_eval.py`
 Đánh giá kết quả thống nhất:
 ```bash
 python unified_eval.py --results_dir ./results
+python unified_eval.py --results_dir ./results_v2
 ```
-Tính: AUC, AUPR, RMSE, MAE trên `.npy` predictions từ tất cả models.
+Tính: AUC, AUPR, RMSE, MAE và bộ metric multi-class 5 mức trên `.npy` predictions từ tất cả models.
 
 ### `prepare_all_data.py`
 Pipeline chuyển đổi data gốc (757→750, 893→994):
