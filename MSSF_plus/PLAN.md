@@ -70,8 +70,8 @@ MSSF_plus/
      - `'zero'`: giữ nguyên vector `0` ở `D9, D10` cho các thuốc không có cặp train.
      - `'drop'`: loại bỏ `D9, D10` khỏi danh sách drug views (chỉ dùng 9 drug views tĩnh `[D1..D8, D11]`, `6750-D`).
      - `'mean'`: điền hàng `D9[d], D10[d]` của các thuốc thiếu profile ($a_{d,\text{D9}}=0$) bằng vector trung bình của các thuốc thuộc `train_drugs`.
-     - `'regress'`: huấn luyện MLP `ProfileViewRegressor` trên `train_drugs` để dự đoán `[D9[d], D10[d]]` từ 9 view tĩnh `[D1..D8, D11]` + `drug_avail_static[d]`, sau đó điền cho mọi thuốc có $a_{d,\text{D9}} = 0$ (gồm thuốc `valsel`, `valcal`, `test` ở Split B).
-     - `'diffusion'`: huấn luyện mô hình diffusion có điều kiện `ConditionalViewDiffusion` trên `train_drugs` để sinh `[D9[d], D10[d]]` có điều kiện trên 9 view tĩnh; khi suy luận lấy trung bình $B$ mẫu (`c1_diffusion_samples`, mặc định $B=10$).
+     - `'regress'`: huấn luyện $K=5$ mạng MLP `ProfileViewRegressor` theo cơ chế **Cross-Fitting theo thuốc** trên `train_drugs` (chia `train_drugs` thành $K=5$ nhóm, mỗi regressor train trên 4 nhóm với 10% early-stopping nội bộ và dự đoán out-of-fold cho nhóm thứ 5 làm `fallback_d9, fallback_d10`), sau đó dùng trung bình cộng của $K=5$ regressor để điền cho mọi thuốc cold-start có $a_{d,\text{D9}} = 0$ (`valsel`, `valcal`, `test` ở Split B).
+     - `'diffusion'`: áp dụng cùng cơ chế Cross-Fitting $K=5$ cho `ConditionalDenoiserMLP`; chỉ giữ làm 1 dòng đối chứng trong bảng Ablation C1 (trên dev folds) do MSE trên `val_select` kém hơn `mean` và `regress`.
 
 ### 2.4. `model.py` (Giữ nguyên 3 Encoder + Self-Attention + BVI, mở rộng C1 & C5)
 - `MSSFPlusModel(nn.Module)`:
@@ -80,17 +80,16 @@ MSSF_plus/
   - Khi `c1_use_availability=True`: module `AvailabilityModulator` xử lý trước khi vào 3 encoder:
     - Với mỗi view $v$, học bộ hệ số điều biến nhẹ $\gamma_v(a_d) \in \mathbb{R}^{750}$ và vector bù khuyết $b_v(a_d) \in \mathbb{R}^{750}$ (khởi tạo $\gamma_v = 1, b_v = 0$):
       $$\tilde{x}^{(v)}_d = \gamma_v(a_d) \odot x^{(v)}_d + (1 - a_{d,v}) \cdot b_v(a_d)$$
-    - Hỗ trợ **View Dropout khi train (`c1_view_dropout_prob`)**: trong `model.train()`, với xác suất $p_{\text{drop}}$, ngẫu nhiên che view profile `D9, D10` của thuốc trong batch và hạ bit $a_{d,\text{D9}} = a_{d,\text{D10}} = 0$ để mô hình học cách suy luận khi thiếu profile.
-  - Đầu ra phân lớp: `5` logits cho `ce` / `emd` / `ce_softquant`, hoặc `4` conditional logits cho `corn` (kèm hàm `predict_proba(logits)` quy đổi thống nhất về xác suất 5 lớp `(batch, 5)`).
+    - Hỗ trợ **View Dropout khi train (`c1_view_dropout_prob`)**: trong `model.train()`, với xác suất $p_{\text{drop}}$, ngẫu nhiên thay view profile `D9, D10` của thuốc train bằng vector dự phòng out-of-fold (`fallback_d9, fallback_d10`) và hạ bit $a_{d,\text{D9}} = a_{d,\text{D10}} = 0$.
+  - Đầu ra phân lớp: `5` logits cho `ce` / `emd`, hoặc `4` logits cho `corn` (kèm hàm `predict_proba(logits)` quy đổi thống nhất về xác suất 5 lớp `(batch, 5)`). Nhánh phụ `aux_cluster_head` mặc định **TẮT** (`c5_aux_cluster_weight = 0.0`) trong `MSSF_plus_full`.
 
-### 2.5. `losses.py` (C3)
+### 2.5. `losses.py` (C3 — Lựa chọn hàm mục tiêu thứ tự)
 - `MSSFPlusCriterion(nn.Module)`:
-  - Loss phụ của MSSF: `0.001 * KL + 0.0001 * RecCon + 0.0001 * RecAdd`.
-  - Loss chính (`c3_loss_type`):
+  - Loss phụ của MSSF gốc (giữ nguyên trọng số, không coi là thành phần mới): `0.001 * KL + 0.0001 * RecCon + 0.0001 * RecAdd`.
+  - Loss chính (`c3_loss_type` — đã gỡ bỏ `ce_softquant` khỏi `MSSF_plus`):
     - `'ce'`: Cross-entropy (hỗ trợ cả nhãn cứng `0..4` và nhãn mềm `soft_target` `(batch, 5)` từ C5).
     - `'emd'`: Squared Earth Mover's Distance trên CDF của `softmax(logits)` và CDF của target.
-    - `'corn'`: CORN conditional binary cross-entropy trên 4 ngưỡng $y > k \mid y \ge k$ ($k=0..3$), tương thích cả nhãn cứng và nhãn mềm tích lũy $P(y > k)$.
-    - `'ce_softquant'`: $\mathcal{L}_{\text{CE}} + \alpha_q \sum_{k=0}^4 \text{softmin}_k(\gamma(t)\cdot d)\, d_k$ với $d_k = |\hat{y} - k|$, $\hat{y} = \sum_{k=0}^4 k p_k$, và $\gamma(t)$ tăng tuyến tính theo epoch.
+    - `'corn'`: CORN binary cross-entropy trên 4 ngưỡng $y > k$ ($k=0..3$); với nhãn mềm $q$, chuyển trực tiếp sang target tích lũy $P(y > k) = \sum_{j > k} q_j$.
   - Cờ độc lập `c3_class_weighting: bool`: nhân trọng số nghịch tần suất chuẩn hoá $w_k = \frac{N_{\text{train}}}{5 N_{\text{train}, k}}$.
 
 ### 2.6. `soft_labels.py` (C5)
@@ -102,33 +101,29 @@ MSSF_plus/
       $$q_{d,s} = (1 - \lambda)\,\text{onehot}(y) + \lambda\, P_{c,s}^{(-d)}$$
 
 ### 2.7. `conformal.py` (C4)
-- `evaluate_conformal_sets(valcal_probs, valcal_labels, test_probs, test_labels, alpha=0.10) -> dict`:
+- `evaluate_all_conformal_methods(valcal_probs, valcal_labels_class, test_probs, test_labels_class, alpha=0.10, test_drug_ids=None) -> dict`:
   - Hiệu chỉnh ngưỡng $\hat{q}_{1-\alpha}$ trên `val_calib` với quy tắc lượng tử hữu hạn mẫu $\lceil (n + 1)(1 - \alpha) \rceil / n$.
-  - 4 phương pháp: `LAC`, `APS`, `Ordinal_LAC` (bao lồi khoảng liên tiếp của LAC), và `Ordinal_APS` (mở rộng khoảng lớp liên tiếp quanh lớp kỳ vọng/mode cho đến khi tổng xác suất đạt $\hat{q}_{1-\alpha}$).
-  - Báo cáo ở mức $90\%$: `empirical_coverage`, `class_coverage` (`c0..c4`), `avg_set_size`, `singleton_rate`, `interval_width`.
+  - 4 phương pháp: `LAC`, `APS`, `Ordinal_LAC`, và `Ordinal_APS`.
+  - Báo cáo ở mức $90\%$: `coverage`, `coverage_c0..c4`, `avg_set_size`, `singleton_rate`, `contiguity_rate`, và thống kê độ phủ theo từng thuốc test (`drug_coverage_mean`, `drug_coverage_std`, `drug_coverage_lt80_rate`).
 
 ---
 
-## 3. Bảng Kế hoạch Ablation Bắt buộc
+## 3. Bảng Kế hoạch Ablation Bắt buộc (`configs/experiments.py`)
 
-| Nhóm | Tên cấu hình (`exp_id`) | C1 (`impute` / `avail` / `vdrop`) | C2 (`se_mode`) | C3 (`loss` / `cw`) | C5 (`soft_label`) | C4 (`conformal`) | Split chạy |
+| Nhóm | Tên cấu hình (`exp_id`) | C1 (`impute` / `avail` / `vdrop`) | C2 (`se_mode`) | C3 (`loss` / `cw`) | C5 (`soft_label` / `aux`) | C4 (`conformal`) | Split chạy |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **0. Baseline** | `MSSF_v2` | `zero` / `False` / `0.0` | `original` | `ce` / `False` | `none` | Post-hoc | A, B |
-| **1. C3 (Loss)** | `c3_ce_cw` | `zero` / `False` / `0.0` | `original` | `ce` / `True` | `none` | — | A, B |
-| | `c3_emd_nocw`, `c3_emd_cw` | `zero` / `False` / `0.0` | `original` | `emd` / `False, True` | `none` | — | A, B |
-| | `c3_corn_nocw`, `c3_corn_cw` | `zero` / `False` / `0.0` | `original` | `corn` / `False, True` | `none` | — | A, B |
-| | `c3_softquant_nocw`, `c3_softquant_cw` | `zero` / `False` / `0.0` | `original` | `ce_softquant` / `False, True` | `none` | — | A, B |
-| **2. C5 (Soft)** | `c5_knn` | `zero` / `False` / `0.0` | `original` | Best C3 | `knn` | — | A, B |
-| | `c5_single_view` | `zero` / `False` / `0.0` | `original` | Best C3 | `single_view` | — | A, B |
-| | `c5_multi_view` | `zero` / `False` / `0.0` | `original` | Best C3 | `multi_view` | — | A, B |
-| **3. C1 (Views)** | `c1_drop` (Author cold-start) | `drop` / `False` / `0.0` | `original` | `ce` / `False` | `none` | — | B (và A) |
-| | `c1_zero_avail_nodrop`, `c1_zero_avail_vdrop` | `zero` / `True` / `0.0, 0.25` | `original` | Best C3 | `none` | — | B (và A) |
-| | `c1_mean_nodrop`, `c1_mean_vdrop` | `mean` / `True` / `0.0, 0.25` | `original` | Best C3 | `none` | — | B (và A) |
-| | `c1_regress_nodrop`, `c1_regress_vdrop` | `regress` / `True` / `0.0, 0.25` | `original` | Best C3 | `none` | — | B (và A) |
-| | `c1_diffusion_nodrop`, `c1_diffusion_vdrop` | `diffusion` / `True` / `0.0, 0.25` | `original` | Best C3 | `none` | — | B (và A) |
-| **4. C2 (SE)** | `c2_plus_ontology` | Best C1 | `plus_ontology` | Best C3 | Best C5 | — | A, B |
-| | `c2_no_profile` | Best C1 | `no_profile` | Best C3 | Best C5 | — | A, B |
-| **5. Full & LOO** | `MSSF_plus_full` | Best C1 | `plus_ontology` | Best C3 | `multi_view` | `LAC, APS, Ord` | A, B |
+| **0. Baseline** | `MSSF_v2` | `zero` / `False` / `0.0` | `original` | `ce` / `False` | `none` / `0.0` | Post-hoc | A, B |
+| **1. C1 (Views)** | `C1_avail_only` | `zero` / `True` / `0.0` | `original` | `ce` / `False` | `none` / `0.0` | — | A, B |
+| | `C1_vdrop_only` | `zero` / `False` / `0.25` | `original` | `ce` / `False` | `none` / `0.0` | — | A, B |
+| | `C1_avail_vdrop_zero`, `C1_avail_vdrop_drop` | `zero, drop` / `True` / `0.25` | `original` | `ce` / `False` | `none` / `0.0` | — | A, B |
+| | `C1_avail_vdrop_mean`, `C1_avail_vdrop_regress` | `mean, regress` / `True` / `0.25` | `original` | `ce` / `False` | `none` / `0.0` | — | A, B |
+| | `C1_regress_no_modulator` *(Mới)* | `regress` / `False` / `0.25` | `original` | `ce` / `False` | `none` / `0.0` | — | A, B |
+| | `C1_avail_vdrop_diffusion` *(Chỉ chạy dev folds)* | `diffusion` / `True` / `0.25` | `original` | `ce` / `False` | `none` / `0.0` | — | A, B (dev) |
+| **2. C2 (SE)** | `C2_plus_ontology`, `C2_no_profile` | `zero` / `False` / `0.0` | `plus_ontology, no_profile` | `ce` / `False` | `none` / `0.0` | — | A, B |
+| **3. C3 (Loss)** | `C3_{ce,emd,corn}_{unweighted,weighted}` (6 tổ hợp) | `regress` / `True` / `0.25` | `plus_ontology` | `{ce,emd,corn}` / `{F,T}` | `multi_view` / `0.0` | — | A, B |
+| **4. C5 (Soft)** | `C5_knn`, `C5_single_view`, `C5_multi_view` | `zero` / `False` / `0.0` | `original` | `ce` / `False` | `{knn,single,multi}` / `0.0` | — | A, B |
+| | `C5_multi_view_aux` | `zero` / `False` / `0.0` | `original` | `ce` / `False` | `multi_view` / `0.05` | — | A, B |
+| **5. Full & LOO** | `MSSF_plus_full` | `regress` / `True` / `0.25` | `plus_ontology` | Best C3 | `multi_view` / `0.0` | `LAC, APS, Ord` | A, B |
 | | `loo_no_C1`, `loo_no_C2`, `loo_no_C3`, `loo_no_C5` | Bỏ lần lượt từng thành phần khỏi `MSSF_plus_full` | | | | Post-hoc | A, B |
 
 ---

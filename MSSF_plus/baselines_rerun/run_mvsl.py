@@ -156,6 +156,7 @@ def _make_mvsl_loader(
     static_bundle: Tuple[np.ndarray, np.ndarray, list, np.ndarray],
     assoc_train: np.ndarray,
     freq_train: np.ndarray,
+    self_corr_in_collate: bool = False,
 ) -> DataLoader:
     onehots_arr, fps_arr, graphs_list, side_vec_arr = static_bundle
     ds = _MVSLPairDataset(pairs_with_rating)
@@ -168,9 +169,19 @@ def _make_mvsl_loader(
         f_lbl = torch.tensor([b[3] / 5.0 for b in batch], dtype=torch.float32)
         f_raw = np.array([b[3] for b in batch], dtype=np.float32)
 
-        assoc_prof = torch.tensor(assoc_train[d_idx, :], dtype=torch.float32)
-        freq_prof = torch.tensor(freq_train[d_idx, :], dtype=torch.float32)
-        assoc_prof_t = torch.tensor(assoc_train[:, s_idx].T, dtype=torch.float32)
+        assoc_np = assoc_train[d_idx, :].copy()
+        freq_np = freq_train[d_idx, :].copy()
+        assoc_t_np = assoc_train[:, s_idx].T.copy()
+
+        if self_corr_in_collate:
+            row_idx = np.arange(len(batch))
+            assoc_np[row_idx, s_idx] = 0.0
+            freq_np[row_idx, s_idx] = 0.0
+            assoc_t_np[row_idx, d_idx] = 0.0
+
+        assoc_prof = torch.tensor(assoc_np, dtype=torch.float32)
+        freq_prof = torch.tensor(freq_np, dtype=torch.float32)
+        assoc_prof_t = torch.tensor(assoc_t_np, dtype=torch.float32)
 
         # Clone graphs because MVSL-DSF's DGL_AttentiveFP.forward pops 'h' and 'e' from bg.ndata/edata!
         graphs = [graphs_list[i].clone() for i in d_idx]
@@ -221,6 +232,10 @@ def run_mvsl_fold(
     set_global_seed(fold_seed)
     fold_split = load_fold_data(fold, split_type)
 
+    use_self_corr = bool(cfg.get('profile_self_correction', False))
+    eval_test = bool(cfg.get('eval_test', False))
+    method_name = 'MVSL-DSF_selfcorr' if use_self_corr else 'MVSL-DSF'
+
     raw_train_freq = make_train_only_freq(fold_split.train).astype(np.float32)
     freq_train = (raw_train_freq / 5.0).astype(np.float32)
     assoc_train = (raw_train_freq > 0).astype(np.float32)
@@ -240,7 +255,10 @@ def run_mvsl_fold(
     eval_bs = int(cfg['eval_batch_size'])
     epochs = int(cfg['epochs'])
 
-    train_loader = _make_mvsl_loader(train_combined, batch_size, True, static_bundle, assoc_train, freq_train)
+    train_loader = _make_mvsl_loader(
+        train_combined, batch_size, True, static_bundle, assoc_train, freq_train,
+        self_corr_in_collate=use_self_corr,
+    )
     valsel_loader = _make_mvsl_loader(fold_split.valsel, eval_bs, False, static_bundle, assoc_train, freq_train)
     test_pos_loader = _make_mvsl_loader(fold_split.test, eval_bs, False, static_bundle, assoc_train, freq_train)
     test_neg_loader = _make_mvsl_loader(neg_test, eval_bs, False, static_bundle, assoc_train, freq_train)
@@ -260,6 +278,7 @@ def run_mvsl_fold(
 
     best_f1 = -float('inf')
     best_f1_epoch = 1
+    best_train_macro_f1 = 0.0
     best_f1_state = copy.deepcopy(model.state_dict())
 
     best_rmse = float('inf')
@@ -270,9 +289,10 @@ def run_mvsl_fold(
         model.train()
         running_loss = 0.0
         n_batches = 0
+        pos_tr_true, pos_tr_pred = [], []
 
         for batch in train_loader:
-            a_lbl, f_lbl, _, assoc_prof, freq_prof, assoc_prof_t, graphs, onehots, fps, side_vec = batch
+            a_lbl, f_lbl, f_raw, assoc_prof, freq_prof, assoc_prof_t, graphs, onehots, fps, side_vec = batch
             a_lbl_dev = a_lbl.to(device)
             f_lbl_dev = f_lbl.to(device)
 
@@ -284,10 +304,14 @@ def run_mvsl_fold(
             freq_out = freq_out.view(-1)
             loss_cls = criterion_cls(cls_out, a_lbl_dev)
             pos_mask = a_lbl_dev == 1
-            loss_freq = (
-                criterion_freq(freq_out[pos_mask], f_lbl_dev[pos_mask])
-                if pos_mask.any() else (freq_out.sum() * 0.0)
-            )
+            if pos_mask.any():
+                loss_freq = criterion_freq(freq_out[pos_mask], f_lbl_dev[pos_mask])
+                pos_mask_np = pos_mask.detach().cpu().numpy()
+                p_freq_pos = (torch.sigmoid(freq_out[pos_mask]).detach().cpu().numpy() * 5.0).astype(np.float32)
+                pos_tr_true.append(f_raw[pos_mask_np])
+                pos_tr_pred.append(p_freq_pos)
+            else:
+                loss_freq = freq_out.sum() * 0.0
             loss = loss_cls + loss_freq + model.consistency_loss
             loss.backward()
             optimizer.step()
@@ -295,12 +319,18 @@ def run_mvsl_fold(
             running_loss += float(loss.item())
             n_batches += 1
 
+        tr_ep_metrics = eval_regression_predictions(
+            np.concatenate(pos_tr_true), np.concatenate(pos_tr_pred)
+        )
+        tr_ep_f1 = float(tr_ep_metrics['MacroF1'])
+
         val_y, _, val_p = _predict_mvsl(model, valsel_loader, device)
         val_metrics = eval_regression_predictions(val_y, val_p)
 
         if val_metrics['MacroF1'] > best_f1:
             best_f1 = val_metrics['MacroF1']
             best_f1_epoch = epoch
+            best_train_macro_f1 = tr_ep_f1
             best_f1_state = copy.deepcopy(model.state_dict())
 
         if val_metrics['RMSE'] < best_rmse:
@@ -310,8 +340,9 @@ def run_mvsl_fold(
 
         if verbose and (epoch == 1 or epoch % 10 == 0 or epoch == epochs):
             print(
-                f"  [MVSL-DSF Split {split_type} Fold {fold}] Ep {epoch:02d}/{epochs:02d} | "
+                f"  [{method_name} Split {split_type} Fold {fold}] Ep {epoch:02d}/{epochs:02d} | "
                 f"Loss={running_loss / max(1, n_batches):.4f} | "
+                f"train MacroF1={tr_ep_f1:.4f} | "
                 f"valsel MacroF1={val_metrics['MacroF1']:.4f} (best={best_f1:.4f}@{best_f1_epoch}) | "
                 f"RMSE={val_metrics['RMSE']:.4f} (best={best_rmse:.4f}@{best_rmse_epoch})"
             )
@@ -319,43 +350,64 @@ def run_mvsl_fold(
     # 1. Primary evaluation (MacroF1-selected checkpoint)
     model.load_state_dict(best_f1_state)
     val_y, _, val_p_f1 = _predict_mvsl(model, valsel_loader, device)
-    test_y, test_cls_pos, test_p_f1 = _predict_mvsl(model, test_pos_loader, device)
-    _, test_cls_neg, _ = _predict_mvsl(model, test_neg_loader, device)
-    assert np.array_equal(np.round(test_y), np.round(fold_split.test[:, 2]))
-
-    bin_y = np.concatenate([np.ones(len(test_cls_pos)), np.zeros(len(test_cls_neg))])
-    bin_s = np.concatenate([test_cls_pos, test_cls_neg])
-    bin_auc = float(roc_auc_score(bin_y, bin_s))
-    bin_aupr = float(average_precision_score(bin_y, bin_s))
-
+    assert np.array_equal(np.round(val_y), np.round(fold_split.valsel[:, 2]))
     valsel_final = eval_regression_predictions(val_y, val_p_f1)
-    test_metrics_f1 = eval_regression_predictions(test_y, test_p_f1)
-    test_metrics_f1['BinaryAUC'] = bin_auc
-    test_metrics_f1['BinaryAUPR'] = bin_aupr
 
-    # 2. Secondary appendix evaluation (RMSE-selected checkpoint)
-    model.load_state_dict(best_rmse_state)
-    _, _, test_p_rmse = _predict_mvsl(model, test_pos_loader, device)
-    test_metrics_rmse = eval_regression_predictions(test_y, test_p_rmse)
+    if best_rmse_epoch == best_f1_epoch:
+        val_p_rmse = val_p_f1.copy()
+        valsel_metrics_rmse = dict(valsel_final)
+    else:
+        model.load_state_dict(best_rmse_state)
+        _, _, val_p_rmse = _predict_mvsl(model, valsel_loader, device)
+        valsel_metrics_rmse = eval_regression_predictions(val_y, val_p_rmse)
+
+    if eval_test:
+        model.load_state_dict(best_f1_state)
+        test_y, test_cls_pos, test_p_f1 = _predict_mvsl(model, test_pos_loader, device)
+        _, test_cls_neg, _ = _predict_mvsl(model, test_neg_loader, device)
+        assert np.array_equal(np.round(test_y), np.round(fold_split.test[:, 2]))
+
+        bin_y = np.concatenate([np.ones(len(test_cls_pos)), np.zeros(len(test_cls_neg))])
+        bin_s = np.concatenate([test_cls_pos, test_cls_neg])
+        bin_auc = float(roc_auc_score(bin_y, bin_s))
+        bin_aupr = float(average_precision_score(bin_y, bin_s))
+
+        test_metrics_f1 = eval_regression_predictions(test_y, test_p_f1)
+        test_metrics_f1['BinaryAUC'] = bin_auc
+        test_metrics_f1['BinaryAUPR'] = bin_aupr
+
+        model.load_state_dict(best_rmse_state)
+        _, _, test_p_rmse = _predict_mvsl(model, test_pos_loader, device)
+        test_metrics_rmse = eval_regression_predictions(test_y, test_p_rmse)
+    else:
+        test_p_f1 = None
+        test_p_rmse = None
+        test_metrics_f1 = None
+        test_metrics_rmse = None
 
     elapsed = time.time() - t0
+    train_valsel_gap = float(best_train_macro_f1 - float(valsel_final['MacroF1']))
     fold_summary = {
-        'method_name': 'MVSL-DSF',
+        'method_name': method_name,
         'split_type': split_type,
         'fold': int(fold),
         'se_source': str(cfg['se_source']),
+        'profile_self_correction': bool(use_self_corr),
         'best_epoch': int(best_f1_epoch),
         'best_valsel_MacroF1': float(best_f1),
+        'best_train_macro_f1': float(best_train_macro_f1),
+        'train_valsel_macro_f1_gap': float(train_valsel_gap),
         'best_rmse_epoch': int(best_rmse_epoch),
         'best_valsel_RMSE': float(best_rmse),
         'valsel_metrics': valsel_final,
+        'rmse_sel_valsel_metrics': valsel_metrics_rmse,
         'test_metrics': test_metrics_f1,
         'rmse_sel_test_metrics': test_metrics_rmse,
         'elapsed_seconds': float(elapsed),
     }
 
     save_baseline_fold_outputs(
-        method_name='MVSL-DSF',
+        method_name=method_name,
         split_type=split_type,
         fold=fold,
         test_split=fold_split.test,
@@ -364,13 +416,18 @@ def run_mvsl_fold(
         results_dir=results_dir,
         drive_dir=drive_dir,
         rmse_sel_preds_float=test_p_rmse,
+        valsel_split=fold_split.valsel,
+        valsel_preds_float=val_p_f1,
+        rmse_sel_valsel_preds_float=val_p_rmse,
+        eval_test=eval_test,
     )
 
     if verbose:
         print(
-            f"  --> MVSL-DSF Fold {fold} Done ({elapsed:.1f}s) | "
-            f"Test MacroF1={test_metrics_f1['MacroF1']:.4f}, QWK={test_metrics_f1['QWK']:.4f}, "
-            f"RMSE={test_metrics_f1['RMSE']:.4f}, BinAUC={bin_auc:.4f}"
+            f"  --> {method_name} Fold {fold} Done ({elapsed:.1f}s) | Best Ep={best_f1_epoch} | "
+            f"valsel MacroF1={valsel_final['MacroF1']:.4f}, QWK={valsel_final['QWK']:.4f}, "
+            f"MAE={valsel_final['MAE']:.4f}, RMSE={valsel_final['RMSE']:.4f} | "
+            f"Gap(tr-val)={train_valsel_gap:+.4f}"
         )
     return fold_summary
 
@@ -395,12 +452,18 @@ def run_mvsl_experiment(
         'hid_dim': 64,
         'se_source': 'mat',  # 'mat' = clean 994x243 MedDRA ontology; 'mvsl_pkl' = 893->994 mapped
         'selection_metric': 'MacroF1',
+        'profile_self_correction': False,
+        'eval_test': False,
         'device': None,
     }
     if overrides:
         for k, v in overrides.items():
             if v is not None:
                 cfg[k] = v
+
+    use_self_corr = bool(cfg.get('profile_self_correction', False))
+    eval_test = bool(cfg.get('eval_test', False))
+    method_name = 'MVSL-DSF_selfcorr' if use_self_corr else 'MVSL-DSF'
 
     folds = get_fold_list(mode=mode, custom_folds=custom_folds)
     device = get_device(cfg.get('device'))
@@ -409,22 +472,24 @@ def run_mvsl_experiment(
 
     if verbose:
         print(
-            f"=== Running MVSL-DSF | Split {split_type} | Mode={mode} (folds={folds}) | "
-            f"Device={device} | Epochs={cfg['epochs']} | SE={cfg['se_source']} | Resume={resume} ==="
+            f"=== Running {method_name} | Split {split_type} | Mode={mode} (folds={folds}) | "
+            f"Device={device} | Epochs={cfg['epochs']} | SE={cfg['se_source']} | "
+            f"SelfCorr={use_self_corr} | Resume={resume} ==="
         )
 
     fold_summaries = []
     for fold in folds:
         if resume:
             cached = try_restore_baseline_fold(
-                'MVSL-DSF', split_type, fold, results_dir, drive_dir=drive_dir, has_rmse_sel=True
+                method_name, split_type, fold, results_dir,
+                drive_dir=drive_dir, has_rmse_sel=True, eval_test=eval_test,
             )
             if cached is not None:
                 if verbose:
-                    tm = cached['test_metrics']
+                    vm = cached['valsel_metrics']
                     print(
-                        f"  [RESUME] Skipping MVSL-DSF_{split_type} Fold {fold} "
-                        f"(MacroF1={tm['MacroF1']:.4f}, RMSE={tm['RMSE']:.4f})"
+                        f"  [RESUME] Skipping {method_name}_{split_type} Fold {fold} "
+                        f"(valsel MacroF1={vm['MacroF1']:.4f}, RMSE={vm['RMSE']:.4f})"
                     )
                 fold_summaries.append(cached)
                 continue
@@ -443,7 +508,7 @@ def run_mvsl_experiment(
         fold_summaries.append(s)
 
     return finalize_baseline_experiment(
-        method_name='MVSL-DSF',
+        method_name=method_name,
         split_type=split_type,
         mode=mode,
         folds=folds,
@@ -465,6 +530,8 @@ def main():
     parser.add_argument('--batch_size', type=int, default=None)
     parser.add_argument('--lr', type=float, default=None)
     parser.add_argument('--se_source', type=str, default=None, choices=['mat', 'mvsl_pkl'])
+    parser.add_argument('--profile_self_correction', type=int, default=None, choices=[0, 1])
+    parser.add_argument('--eval_test', action='store_true')
     parser.add_argument('--device', type=str, default=None)
     parser.add_argument('--results_dir', type=str, default=DEFAULT_RESULTS_V2_DIR)
     parser.add_argument('--drive_dir', type=str, default=None)
@@ -483,6 +550,10 @@ def main():
             'batch_size': args.batch_size,
             'lr': args.lr,
             'se_source': args.se_source,
+            'profile_self_correction': (
+                bool(args.profile_self_correction) if args.profile_self_correction is not None else None
+            ),
+            'eval_test': bool(args.eval_test),
             'device': args.device,
         },
         verbose=True,

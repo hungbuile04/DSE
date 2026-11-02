@@ -57,6 +57,11 @@ class MSSFPlusDataset(Dataset):
         else:
             self.cluster_ids = torch.full((n,), -1, dtype=torch.long)
 
+        self._drug_indices_t = torch.from_numpy(self.drug_indices)
+        self._se_indices_t = torch.from_numpy(self.se_indices)
+        self._labels_t = torch.from_numpy(self.labels)
+        self._freqs_t = torch.from_numpy(self.freqs)
+
     def __len__(self) -> int:
         return len(self.pairs)
 
@@ -77,6 +82,29 @@ class MSSFPlusDataset(Dataset):
             'soft_target': self.soft_targets[idx],
             'cluster_id': self.cluster_ids[idx],
         }
+
+    def __getitems__(self, indices) -> Dict[str, torch.Tensor]:
+        idx = torch.as_tensor(indices, dtype=torch.long)
+        d = self._drug_indices_t[idx]
+        s = self._se_indices_t[idx]
+        return {
+            'drug_idx': d,
+            'se_idx': s,
+            'drug_feat': self.drug_features[d],
+            'se_feat': self.se_features[s],
+            'drug_avail': self.drug_avail[d],
+            'se_avail': self.se_avail[s],
+            'fallback_d9': self.fallback_d9[d],
+            'fallback_d10': self.fallback_d10[d],
+            'label': self._labels_t[idx],
+            'freq': self._freqs_t[idx],
+            'soft_target': self.soft_targets[idx],
+            'cluster_id': self.cluster_ids[idx],
+        }
+
+
+def _identity_collate(batch):
+    return batch
 
 
 def build_dataloaders(
@@ -112,24 +140,28 @@ def build_dataloaders(
         shuffle=True,
         generator=g,
         drop_last=False,
+        collate_fn=_identity_collate,
     )
     valsel_loader = DataLoader(
         valsel_ds,
         batch_size=eval_batch_size,
         shuffle=False,
         drop_last=False,
+        collate_fn=_identity_collate,
     )
     valcal_loader = DataLoader(
         valcal_ds,
         batch_size=eval_batch_size,
         shuffle=False,
         drop_last=False,
+        collate_fn=_identity_collate,
     )
     test_loader = DataLoader(
         test_ds,
         batch_size=eval_batch_size,
         shuffle=False,
         drop_last=False,
+        collate_fn=_identity_collate,
     )
 
     return train_loader, valsel_loader, valcal_loader, test_loader

@@ -161,6 +161,7 @@ def try_restore_baseline_fold(
     results_dir: str,
     drive_dir: Optional[str] = None,
     has_rmse_sel: bool = True,
+    eval_test: bool = False,
 ) -> Optional[dict]:
     """
     Check if `fold` is already completed locally or in `drive_dir`. If found in `drive_dir`,
@@ -169,10 +170,15 @@ def try_restore_baseline_fold(
     primary_folder = f'{method_name}_{split_type}'
     primary_dir = os.path.join(results_dir, primary_folder)
     req_files = [
-        f'fold_{fold}_labels.npy',
-        f'fold_{fold}_preds.npy',
+        f'fold_{fold}_valsel_labels.npy',
+        f'fold_{fold}_valsel_preds.npy',
         f'fold_{fold}_summary.json',
     ]
+    if eval_test:
+        req_files.extend([
+            f'fold_{fold}_labels.npy',
+            f'fold_{fold}_preds.npy',
+        ])
 
     folders = [(primary_folder, primary_dir)]
     if has_rmse_sel:
@@ -197,7 +203,9 @@ def try_restore_baseline_fold(
             if not all(os.path.exists(os.path.join(rmse_dir, f)) for f in req_files[:2]):
                 return None
         with open(os.path.join(primary_dir, f'fold_{fold}_summary.json'), 'r', encoding='utf-8') as f:
-            return json.load(f)
+            summary_data = json.load(f)
+        if 'best_train_macro_f1' in summary_data:
+            return summary_data
     return None
 
 
@@ -206,45 +214,68 @@ def save_baseline_fold_outputs(
     split_type: str,
     fold: int,
     test_split: np.ndarray,
-    test_preds_float: np.ndarray,
+    test_preds_float: Optional[np.ndarray],
     fold_summary: dict,
     results_dir: str = DEFAULT_RESULTS_V2_DIR,
     drive_dir: Optional[str] = None,
     rmse_sel_preds_float: Optional[np.ndarray] = None,
+    valsel_split: Optional[np.ndarray] = None,
+    valsel_preds_float: Optional[np.ndarray] = None,
+    rmse_sel_valsel_preds_float: Optional[np.ndarray] = None,
+    eval_test: bool = False,
 ) -> None:
     """
-    Save primary (`MacroF1`-selected) and optional secondary (`RMSE`-selected) fold outputs,
-    asserting exact 1-to-1 sample alignment with `test_split[:, 2]`, and sync to `drive_dir`.
+    Save primary (`MacroF1`-selected) and optional secondary (`RMSE`-selected) fold outputs.
+    Always saves `fold_{k}_valsel_labels.npy` and `fold_{k}_valsel_preds.npy`.
+    Only saves `fold_{k}_labels.npy` and `fold_{k}_preds.npy` when `eval_test=True` (Stage 7).
     """
-    expected_labels = np.asarray(test_split[:, 2], dtype=np.float64).flatten()
-    preds_primary = np.asarray(test_preds_float, dtype=np.float32).flatten()
-    if len(preds_primary) != len(expected_labels):
-        raise AssertionError(
-            f"{method_name} Split {split_type} Fold {fold}: pred length {len(preds_primary)} "
-            f"!= test_split length {len(expected_labels)}"
-        )
-
     primary_folder = f'{method_name}_{split_type}'
     primary_dir = os.path.join(results_dir, primary_folder)
     os.makedirs(primary_dir, exist_ok=True)
-    np.save(os.path.join(primary_dir, f'fold_{fold}_labels.npy'), expected_labels)
-    np.save(os.path.join(primary_dir, f'fold_{fold}_preds.npy'), preds_primary)
+
+    if valsel_split is not None and valsel_preds_float is not None:
+        vs_labels = np.asarray(valsel_split[:, 2], dtype=np.float64).flatten()
+        vs_preds = np.asarray(valsel_preds_float, dtype=np.float32).flatten()
+        assert len(vs_preds) == len(vs_labels), (
+            f"{method_name} Split {split_type} Fold {fold}: valsel pred length {len(vs_preds)} != {len(vs_labels)}"
+        )
+        np.save(os.path.join(primary_dir, f'fold_{fold}_valsel_labels.npy'), vs_labels)
+        np.save(os.path.join(primary_dir, f'fold_{fold}_valsel_preds.npy'), vs_preds)
+
+    if eval_test and test_preds_float is not None:
+        expected_labels = np.asarray(test_split[:, 2], dtype=np.float64).flatten()
+        preds_primary = np.asarray(test_preds_float, dtype=np.float32).flatten()
+        if len(preds_primary) != len(expected_labels):
+            raise AssertionError(
+                f"{method_name} Split {split_type} Fold {fold}: pred length {len(preds_primary)} "
+                f"!= test_split length {len(expected_labels)}"
+            )
+        np.save(os.path.join(primary_dir, f'fold_{fold}_labels.npy'), expected_labels)
+        np.save(os.path.join(primary_dir, f'fold_{fold}_preds.npy'), preds_primary)
+
     with open(os.path.join(primary_dir, f'fold_{fold}_summary.json'), 'w', encoding='utf-8') as f:
         json.dump(fold_summary, f, indent=2)
     sync_dir_to_drive(primary_dir, drive_dir, primary_folder)
 
-    if rmse_sel_preds_float is not None:
-        preds_rmse = np.asarray(rmse_sel_preds_float, dtype=np.float32).flatten()
-        if len(preds_rmse) != len(expected_labels):
-            raise AssertionError(
-                f"{method_name}_rmseSel Split {split_type} Fold {fold}: pred length {len(preds_rmse)} "
-                f"!= test_split length {len(expected_labels)}"
-            )
+    if rmse_sel_preds_float is not None or rmse_sel_valsel_preds_float is not None:
         rmse_folder = f'{method_name}_rmseSel_{split_type}'
         rmse_dir = os.path.join(results_dir, rmse_folder)
         os.makedirs(rmse_dir, exist_ok=True)
-        np.save(os.path.join(rmse_dir, f'fold_{fold}_labels.npy'), expected_labels)
-        np.save(os.path.join(rmse_dir, f'fold_{fold}_preds.npy'), preds_rmse)
+        if valsel_split is not None and rmse_sel_valsel_preds_float is not None:
+            vs_labels = np.asarray(valsel_split[:, 2], dtype=np.float64).flatten()
+            vs_rmse = np.asarray(rmse_sel_valsel_preds_float, dtype=np.float32).flatten()
+            np.save(os.path.join(rmse_dir, f'fold_{fold}_valsel_labels.npy'), vs_labels)
+            np.save(os.path.join(rmse_dir, f'fold_{fold}_valsel_preds.npy'), vs_rmse)
+        if eval_test and rmse_sel_preds_float is not None:
+            expected_labels = np.asarray(test_split[:, 2], dtype=np.float64).flatten()
+            preds_rmse = np.asarray(rmse_sel_preds_float, dtype=np.float32).flatten()
+            if len(preds_rmse) != len(expected_labels):
+                raise AssertionError(
+                    f"{method_name}_rmseSel Split {split_type} Fold {fold}: pred length {len(preds_rmse)} "
+                    f"!= test_split length {len(expected_labels)}"
+                )
+            np.save(os.path.join(rmse_dir, f'fold_{fold}_labels.npy'), expected_labels)
+            np.save(os.path.join(rmse_dir, f'fold_{fold}_preds.npy'), preds_rmse)
         with open(os.path.join(rmse_dir, f'fold_{fold}_summary.json'), 'w', encoding='utf-8') as f:
             json.dump(fold_summary, f, indent=2)
         sync_dir_to_drive(rmse_dir, drive_dir, rmse_folder)
@@ -263,8 +294,14 @@ def finalize_baseline_experiment(
     verbose: bool = True,
 ) -> dict:
     """Aggregate fold summaries, save `config.json` & `summary_{mode}.json`, and sync to Drive."""
-    test_mean, test_std = aggregate_fold_metrics([s['test_metrics'] for s in fold_summaries])
     valsel_mean, valsel_std = aggregate_fold_metrics([s['valsel_metrics'] for s in fold_summaries])
+    has_test = all(s.get('test_metrics') is not None for s in fold_summaries)
+    if has_test:
+        test_mean, test_std = aggregate_fold_metrics([s['test_metrics'] for s in fold_summaries])
+        test_summary = {'mean': test_mean, 'std': test_std}
+    else:
+        test_mean, test_std = None, None
+        test_summary = None
 
     exp_summary = {
         'method_name': method_name,
@@ -273,13 +310,17 @@ def finalize_baseline_experiment(
         'folds': folds,
         'config': cfg,
         'valsel_summary': {'mean': valsel_mean, 'std': valsel_std},
-        'test_summary': {'mean': test_mean, 'std': test_std},
+        'test_summary': test_summary,
         'fold_summaries': fold_summaries,
     }
 
-    if has_rmse_sel and all('rmse_sel_test_metrics' in s for s in fold_summaries):
-        rm_mean, rm_std = aggregate_fold_metrics([s['rmse_sel_test_metrics'] for s in fold_summaries])
-        exp_summary['rmse_sel_test_summary'] = {'mean': rm_mean, 'std': rm_std}
+    if has_rmse_sel:
+        if all(s.get('rmse_sel_valsel_metrics') is not None for s in fold_summaries):
+            rm_vm, rm_vs = aggregate_fold_metrics([s['rmse_sel_valsel_metrics'] for s in fold_summaries])
+            exp_summary['rmse_sel_valsel_summary'] = {'mean': rm_vm, 'std': rm_vs}
+        if all(s.get('rmse_sel_test_metrics') is not None for s in fold_summaries):
+            rm_mean, rm_std = aggregate_fold_metrics([s['rmse_sel_test_metrics'] for s in fold_summaries])
+            exp_summary['rmse_sel_test_summary'] = {'mean': rm_mean, 'std': rm_std}
 
         rmse_folder = f'{method_name}_rmseSel_{split_type}'
         rmse_dir = os.path.join(results_dir, rmse_folder)
@@ -298,14 +339,17 @@ def finalize_baseline_experiment(
     sync_dir_to_drive(primary_dir, drive_dir, primary_folder)
 
     if verbose:
+        rep_m = test_mean if test_mean is not None else valsel_mean
+        rep_s = test_std if test_std is not None else valsel_std
+        rep_tag = "Test" if test_mean is not None else "val_select (test locked)"
         print(
-            f"=== Summary {method_name} (Split {split_type}, {len(folds)} folds, MacroF1-selected) ===\n"
-            f"  MacroF1    : {test_mean['MacroF1']:.4f} +/- {test_std['MacroF1']:.4f}\n"
-            f"  WeightedF1 : {test_mean['WeightedF1']:.4f} +/- {test_std['WeightedF1']:.4f}\n"
-            f"  Accuracy   : {test_mean['Accuracy']:.4f} +/- {test_std['Accuracy']:.4f}\n"
-            f"  QWK        : {test_mean['QWK']:.4f} +/- {test_std['QWK']:.4f}\n"
-            f"  RMSE       : {test_mean['RMSE']:.4f} +/- {test_std['RMSE']:.4f}\n"
-            f"  RegMAE     : {test_mean['RegMAE']:.4f} +/- {test_std['RegMAE']:.4f}\n"
+            f"=== Summary {method_name} (Split {split_type}, {len(folds)} folds, {rep_tag}, MacroF1-selected) ===\n"
+            f"  MacroF1    : {rep_m['MacroF1']:.4f} +/- {rep_s['MacroF1']:.4f}\n"
+            f"  WeightedF1 : {rep_m['WeightedF1']:.4f} +/- {rep_s['WeightedF1']:.4f}\n"
+            f"  Accuracy   : {rep_m['Accuracy']:.4f} +/- {rep_s['Accuracy']:.4f}\n"
+            f"  QWK        : {rep_m['QWK']:.4f} +/- {rep_s['QWK']:.4f}\n"
+            f"  MAE        : {rep_m['MAE']:.4f} +/- {rep_s['MAE']:.4f}\n"
+            f"  RMSE       : {rep_m['RMSE']:.4f} +/- {rep_s['RMSE']:.4f}\n"
             f"  Saved to   : {summary_path}"
         )
     return exp_summary

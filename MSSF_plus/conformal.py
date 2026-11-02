@@ -13,7 +13,7 @@ All 4 methods are strictly post-hoc: they never alter point predictions (argmax 
 and guarantee finite-sample marginal coverage >= 1 - alpha under exchangeability.
 """
 
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 import math
 import numpy as np
 
@@ -80,9 +80,11 @@ def _evaluate_prediction_sets(
     pred_sets: np.ndarray,
     y_true_0_to_4: np.ndarray,
     q_hat: float,
+    test_drug_ids: Optional[np.ndarray] = None,
 ) -> Dict[str, float]:
     """
-    Compute conformal metrics given boolean prediction set matrix (N, 5) and true classes (N,) in {0..4}.
+    Compute conformal metrics given boolean prediction set matrix (N, 5), true classes (N,) in {0..4},
+    and optional `test_drug_ids` (N,) for per-drug coverage statistics (Change 4).
     """
     n = len(y_true_0_to_4)
     covered = pred_sets[np.arange(n), y_true_0_to_4]
@@ -102,6 +104,29 @@ def _evaluate_prediction_sets(
             res[f'coverage_c{c}'] = float(covered[mask_c].mean())
         else:
             res[f'coverage_c{c}'] = float('nan')
+
+    if test_drug_ids is not None and len(test_drug_ids) == n:
+        d_ids = np.asarray(test_drug_ids, dtype=int).flatten()
+        uniq_drugs = np.unique(d_ids)
+        if len(uniq_drugs) > 0:
+            per_drug_cov = np.array(
+                [float(covered[d_ids == d].mean()) for d in uniq_drugs], dtype=np.float64
+            )
+            res['drug_coverage_mean'] = float(per_drug_cov.mean())
+            res['drug_coverage_std'] = float(per_drug_cov.std(ddof=0))
+            res['drug_coverage_lt80_rate'] = float((per_drug_cov < 0.80).mean())
+            res['n_test_drugs'] = float(len(uniq_drugs))
+        else:
+            res['drug_coverage_mean'] = float('nan')
+            res['drug_coverage_std'] = float('nan')
+            res['drug_coverage_lt80_rate'] = float('nan')
+            res['n_test_drugs'] = 0.0
+    else:
+        res['drug_coverage_mean'] = float('nan')
+        res['drug_coverage_std'] = float('nan')
+        res['drug_coverage_lt80_rate'] = float('nan')
+        res['n_test_drugs'] = float('nan')
+
     return res
 
 
@@ -111,6 +136,7 @@ def run_lac(
     test_probs: np.ndarray,
     test_y: np.ndarray,
     alpha: float = 0.10,
+    test_drug_ids: Optional[np.ndarray] = None,
 ) -> Tuple[Dict[str, float], np.ndarray]:
     """Standard LAC: s(x, y) = 1 - p(y|x)."""
     n_cal = len(cal_y)
@@ -123,7 +149,7 @@ def run_lac(
     top1 = np.argmax(test_probs, axis=1)
     pred_sets[np.arange(len(test_probs)), top1] = True
 
-    return _evaluate_prediction_sets(pred_sets, test_y, q_hat), pred_sets
+    return _evaluate_prediction_sets(pred_sets, test_y, q_hat, test_drug_ids=test_drug_ids), pred_sets
 
 
 def run_aps(
@@ -133,6 +159,7 @@ def run_aps(
     test_y: np.ndarray,
     alpha: float = 0.10,
     seed: int = 42,
+    test_drug_ids: Optional[np.ndarray] = None,
 ) -> Tuple[Dict[str, float], np.ndarray]:
     """Standard randomized APS sorting classes by descending probability."""
     rng = np.random.RandomState(seed)
@@ -165,7 +192,7 @@ def run_aps(
     pred_sets = np.zeros_like(test_probs, dtype=bool)
     np.put_along_axis(pred_sets, test_order, include_sorted, axis=1)
 
-    return _evaluate_prediction_sets(pred_sets, test_y, q_hat), pred_sets
+    return _evaluate_prediction_sets(pred_sets, test_y, q_hat, test_drug_ids=test_drug_ids), pred_sets
 
 
 def run_ordinal_lac(
@@ -174,6 +201,7 @@ def run_ordinal_lac(
     test_probs: np.ndarray,
     test_y: np.ndarray,
     alpha: float = 0.10,
+    test_drug_ids: Optional[np.ndarray] = None,
 ) -> Tuple[Dict[str, float], np.ndarray]:
     """
     Ordinal LAC: expands a contiguous interval greedily from argmax p(k|x).
@@ -201,7 +229,7 @@ def run_ordinal_lac(
     pred_sets = np.zeros_like(test_probs, dtype=bool)
     np.put_along_axis(pred_sets, test_orders, include_ordered, axis=1)
 
-    return _evaluate_prediction_sets(pred_sets, test_y, q_hat), pred_sets
+    return _evaluate_prediction_sets(pred_sets, test_y, q_hat, test_drug_ids=test_drug_ids), pred_sets
 
 
 def run_ordinal_aps(
@@ -211,6 +239,7 @@ def run_ordinal_aps(
     test_y: np.ndarray,
     alpha: float = 0.10,
     seed: int = 42,
+    test_drug_ids: Optional[np.ndarray] = None,
 ) -> Tuple[Dict[str, float], np.ndarray]:
     """
     Ordinal APS: accumulates probability mass along the greedy contiguous interval path
@@ -244,7 +273,7 @@ def run_ordinal_aps(
     pred_sets = np.zeros_like(test_probs, dtype=bool)
     np.put_along_axis(pred_sets, test_orders, include_ordered, axis=1)
 
-    return _evaluate_prediction_sets(pred_sets, test_y, q_hat), pred_sets
+    return _evaluate_prediction_sets(pred_sets, test_y, q_hat, test_drug_ids=test_drug_ids), pred_sets
 
 
 def evaluate_all_conformal_methods(
@@ -254,18 +283,29 @@ def evaluate_all_conformal_methods(
     test_labels_1_to_5: np.ndarray,
     alpha: float = 0.10,
     seed: int = 42,
+    test_drug_ids: Optional[np.ndarray] = None,
 ) -> Dict[str, Dict[str, float]]:
     """
     Calibrate and evaluate all 4 C4 conformal methods (`LAC`, `APS`, `Ordinal_LAC`, `Ordinal_APS`)
     on a single fold using `val_calib` and `test`.
+     Note (Split B): `val_calib` is partitioned by drug, so coverage guarantees hold at the
+    drug level on average while pairs within the same drug are correlated.
     """
     cal_y = np.clip(np.round(valcal_labels_1_to_5).astype(int) - 1, 0, 4)
     test_y = np.clip(np.round(test_labels_1_to_5).astype(int) - 1, 0, 4)
 
-    lac_metrics, _ = run_lac(valcal_probs, cal_y, test_probs, test_y, alpha=alpha)
-    aps_metrics, _ = run_aps(valcal_probs, cal_y, test_probs, test_y, alpha=alpha, seed=seed)
-    ord_lac_metrics, _ = run_ordinal_lac(valcal_probs, cal_y, test_probs, test_y, alpha=alpha)
-    ord_aps_metrics, _ = run_ordinal_aps(valcal_probs, cal_y, test_probs, test_y, alpha=alpha, seed=seed)
+    lac_metrics, _ = run_lac(
+        valcal_probs, cal_y, test_probs, test_y, alpha=alpha, test_drug_ids=test_drug_ids
+    )
+    aps_metrics, _ = run_aps(
+        valcal_probs, cal_y, test_probs, test_y, alpha=alpha, seed=seed, test_drug_ids=test_drug_ids
+    )
+    ord_lac_metrics, _ = run_ordinal_lac(
+        valcal_probs, cal_y, test_probs, test_y, alpha=alpha, test_drug_ids=test_drug_ids
+    )
+    ord_aps_metrics, _ = run_ordinal_aps(
+        valcal_probs, cal_y, test_probs, test_y, alpha=alpha, seed=seed, test_drug_ids=test_drug_ids
+    )
 
     return {
         'LAC': lac_metrics,

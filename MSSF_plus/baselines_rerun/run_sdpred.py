@@ -154,6 +154,23 @@ def run_sdpred_fold(
     drug_mat_t = torch.tensor(drug_mat, dtype=torch.float32, device=device)
     side_mat_t = torch.tensor(side_mat, dtype=torch.float32, device=device)
 
+    use_self_corr = bool(cfg.get('profile_self_correction', False))
+    eval_test = bool(cfg.get('eval_test', False))
+    method_name = 'SDPred_selfcorr' if use_self_corr else 'SDPred'
+
+    if use_self_corr:
+        from MSSF_plus.views import compute_batch_self_corrected_profiles
+        y_tr_t = torch.tensor(drug_side_train, dtype=torch.float32, device=device)
+        b_tr_t = (y_tr_t > 0.0).to(torch.float32)
+        g_d9_t = y_tr_t @ y_tr_t.t()
+        n2_d9_t = (y_tr_t * y_tr_t).sum(dim=1)
+        g_d10_t = b_tr_t @ b_tr_t.t()
+        n2_d10_t = (b_tr_t * b_tr_t).sum(dim=1)
+        g_s3_t = y_tr_t.t() @ y_tr_t
+        n2_s3_t = (y_tr_t * y_tr_t).sum(dim=0)
+        g_s4_t = b_tr_t.t() @ b_tr_t
+        n2_s4_t = (b_tr_t * b_tr_t).sum(dim=0)
+
     # 1:1 leak-free negative sampling for training (matching SDPred multi-task loss)
     neg_train_xy = sample_negative_pairs_v2(
         drug_side_train, fold_split, n_samples=len(fold_split.train), part='train', seed=fold_seed
@@ -189,6 +206,7 @@ def run_sdpred_fold(
 
     best_f1 = -float('inf')
     best_f1_epoch = 1
+    best_train_macro_f1 = 0.0
     best_f1_state = copy.deepcopy(model.state_dict())
 
     best_rmse = float('inf')
@@ -199,12 +217,37 @@ def run_sdpred_fold(
         model.train()
         running_loss = 0.0
         n_batches = 0
+        pos_tr_true, pos_tr_pred = [], []
 
         for batch_d, batch_s, batch_r in train_loader:
+            b_d_dev = batch_d.to(device)
+            b_s_dev = batch_s.to(device)
             batch_r_dev = batch_r.to(device)
             batch_lbl_dev = (batch_r_dev > 0).float()
-            d_feat = drug_mat_t[batch_d.to(device)]
-            s_feat = side_mat_t[batch_s.to(device)]
+            d_feat = drug_mat_t[b_d_dev]
+            s_feat = side_mat_t[b_s_dev]
+
+            if use_self_corr:
+                d_feat = d_feat.clone()
+                s_feat = s_feat.clone()
+                d9_c, d10_c, s3_c, s4_c = compute_batch_self_corrected_profiles(
+                    drug_idx=b_d_dev,
+                    se_idx=b_s_dev,
+                    y_train=y_tr_t,
+                    b_train=b_tr_t,
+                    g_d9=g_d9_t,
+                    norm2_d9=n2_d9_t,
+                    g_d10=g_d10_t,
+                    norm2_d10=n2_d10_t,
+                    g_s3=g_s3_t,
+                    norm2_s3=n2_s3_t,
+                    g_s4=g_s4_t,
+                    norm2_s4=n2_s4_t,
+                )
+                d_feat[:, 8 * N_DRUGS:9 * N_DRUGS] = d9_c
+                d_feat[:, 9 * N_DRUGS:10 * N_DRUGS] = d10_c
+                s_feat[:, 2 * N_SIDES:3 * N_SIDES] = s3_c
+                s_feat[:, 3 * N_SIDES:4 * N_SIDES] = s4_c
 
             optimizer.zero_grad()
             logits, pred_reg = model(d_feat, s_feat, device)
@@ -216,6 +259,8 @@ def run_sdpred_fold(
             if pos_mask.any():
                 loss2 = reg_criterion(pred_reg[pos_mask], batch_r_dev[pos_mask])
                 total_loss = loss1 * loss2
+                pos_tr_true.append(batch_r_dev[pos_mask].detach().cpu().numpy())
+                pos_tr_pred.append(pred_reg[pos_mask].detach().cpu().numpy())
             else:
                 total_loss = loss1
 
@@ -225,12 +270,18 @@ def run_sdpred_fold(
             running_loss += float(total_loss.item())
             n_batches += 1
 
+        tr_ep_metrics = eval_regression_predictions(
+            np.concatenate(pos_tr_true), np.concatenate(pos_tr_pred)
+        )
+        tr_ep_f1 = float(tr_ep_metrics['MacroF1'])
+
         val_y, _, val_p = _predict_sdpred(model, valsel_loader, drug_mat_t, side_mat_t, device)
         val_metrics = eval_regression_predictions(val_y, val_p)
 
         if val_metrics['MacroF1'] > best_f1:
             best_f1 = val_metrics['MacroF1']
             best_f1_epoch = epoch
+            best_train_macro_f1 = tr_ep_f1
             best_f1_state = copy.deepcopy(model.state_dict())
 
         if val_metrics['RMSE'] < best_rmse:
@@ -240,8 +291,9 @@ def run_sdpred_fold(
 
         if verbose and (epoch == 1 or epoch % 20 == 0 or epoch == epochs):
             print(
-                f"  [SDPred Split {split_type} Fold {fold}] Ep {epoch:03d}/{epochs:03d} | "
+                f"  [{method_name} Split {split_type} Fold {fold}] Ep {epoch:03d}/{epochs:03d} | "
                 f"Loss={running_loss / max(1, n_batches):.4f} | "
+                f"train MacroF1={tr_ep_f1:.4f} | "
                 f"valsel MacroF1={val_metrics['MacroF1']:.4f} (best={best_f1:.4f}@{best_f1_epoch}) | "
                 f"RMSE={val_metrics['RMSE']:.4f} (best={best_rmse:.4f}@{best_rmse_epoch})"
             )
@@ -249,48 +301,69 @@ def run_sdpred_fold(
     # 1. Primary evaluation (MacroF1-selected checkpoint)
     model.load_state_dict(best_f1_state)
     val_y, _, val_p_f1 = _predict_sdpred(model, valsel_loader, drug_mat_t, side_mat_t, device)
-    test_y, test_cls_pos, test_p_f1 = _predict_sdpred(
-        model, test_pos_loader, drug_mat_t, side_mat_t, device
-    )
-    _, test_cls_neg, _ = _predict_sdpred(model, test_neg_loader, drug_mat_t, side_mat_t, device)
-    assert np.array_equal(np.round(test_y), np.round(fold_split.test[:, 2]))
-
-    bin_y = np.concatenate([np.ones(len(test_cls_pos)), np.zeros(len(test_cls_neg))])
-    bin_s = np.concatenate([test_cls_pos, test_cls_neg])
-    bin_auc = float(roc_auc_score(bin_y, bin_s))
-    bin_aupr = float(average_precision_score(bin_y, bin_s))
-
+    assert np.array_equal(np.round(val_y), np.round(fold_split.valsel[:, 2]))
     valsel_final = eval_regression_predictions(val_y, val_p_f1)
-    test_metrics_f1 = eval_regression_predictions(test_y, test_p_f1)
-    test_metrics_f1['BinaryAUC'] = bin_auc
-    test_metrics_f1['BinaryAUPR'] = bin_aupr
 
-    # 2. Secondary appendix evaluation (RMSE-selected checkpoint)
     if best_rmse_epoch == best_f1_epoch:
-        test_p_rmse = test_p_f1.copy()
-        test_metrics_rmse = dict(test_metrics_f1)
+        val_p_rmse = val_p_f1.copy()
+        valsel_metrics_rmse = dict(valsel_final)
     else:
         model.load_state_dict(best_rmse_state)
-        _, _, test_p_rmse = _predict_sdpred(model, test_pos_loader, drug_mat_t, side_mat_t, device)
-        test_metrics_rmse = eval_regression_predictions(test_y, test_p_rmse)
+        _, _, val_p_rmse = _predict_sdpred(model, valsel_loader, drug_mat_t, side_mat_t, device)
+        valsel_metrics_rmse = eval_regression_predictions(val_y, val_p_rmse)
+
+    if eval_test:
+        model.load_state_dict(best_f1_state)
+        test_y, test_cls_pos, test_p_f1 = _predict_sdpred(
+            model, test_pos_loader, drug_mat_t, side_mat_t, device
+        )
+        _, test_cls_neg, _ = _predict_sdpred(model, test_neg_loader, drug_mat_t, side_mat_t, device)
+        assert np.array_equal(np.round(test_y), np.round(fold_split.test[:, 2]))
+
+        bin_y = np.concatenate([np.ones(len(test_cls_pos)), np.zeros(len(test_cls_neg))])
+        bin_s = np.concatenate([test_cls_pos, test_cls_neg])
+        bin_auc = float(roc_auc_score(bin_y, bin_s))
+        bin_aupr = float(average_precision_score(bin_y, bin_s))
+
+        test_metrics_f1 = eval_regression_predictions(test_y, test_p_f1)
+        test_metrics_f1['BinaryAUC'] = bin_auc
+        test_metrics_f1['BinaryAUPR'] = bin_aupr
+
+        if best_rmse_epoch == best_f1_epoch:
+            test_p_rmse = test_p_f1.copy()
+            test_metrics_rmse = dict(test_metrics_f1)
+        else:
+            model.load_state_dict(best_rmse_state)
+            _, _, test_p_rmse = _predict_sdpred(model, test_pos_loader, drug_mat_t, side_mat_t, device)
+            test_metrics_rmse = eval_regression_predictions(test_y, test_p_rmse)
+    else:
+        test_p_f1 = None
+        test_p_rmse = None
+        test_metrics_f1 = None
+        test_metrics_rmse = None
 
     elapsed = time.time() - t0
+    train_valsel_gap = float(best_train_macro_f1 - float(valsel_final['MacroF1']))
     fold_summary = {
-        'method_name': 'SDPred',
+        'method_name': method_name,
         'split_type': split_type,
         'fold': int(fold),
+        'profile_self_correction': bool(use_self_corr),
         'best_epoch': int(best_f1_epoch),
         'best_valsel_MacroF1': float(best_f1),
+        'best_train_macro_f1': float(best_train_macro_f1),
+        'train_valsel_macro_f1_gap': float(train_valsel_gap),
         'best_rmse_epoch': int(best_rmse_epoch),
         'best_valsel_RMSE': float(best_rmse),
         'valsel_metrics': valsel_final,
+        'rmse_sel_valsel_metrics': valsel_metrics_rmse,
         'test_metrics': test_metrics_f1,
         'rmse_sel_test_metrics': test_metrics_rmse,
         'elapsed_seconds': float(elapsed),
     }
 
     save_baseline_fold_outputs(
-        method_name='SDPred',
+        method_name=method_name,
         split_type=split_type,
         fold=fold,
         test_split=fold_split.test,
@@ -299,13 +372,18 @@ def run_sdpred_fold(
         results_dir=results_dir,
         drive_dir=drive_dir,
         rmse_sel_preds_float=test_p_rmse,
+        valsel_split=fold_split.valsel,
+        valsel_preds_float=val_p_f1,
+        rmse_sel_valsel_preds_float=val_p_rmse,
+        eval_test=eval_test,
     )
 
     if verbose:
         print(
-            f"  --> SDPred Fold {fold} Done ({elapsed:.1f}s) | "
-            f"Test MacroF1={test_metrics_f1['MacroF1']:.4f}, QWK={test_metrics_f1['QWK']:.4f}, "
-            f"RMSE={test_metrics_f1['RMSE']:.4f}, BinAUC={bin_auc:.4f}"
+            f"  --> {method_name} Fold {fold} Done ({elapsed:.1f}s) | Best Ep={best_f1_epoch} | "
+            f"valsel MacroF1={valsel_final['MacroF1']:.4f}, QWK={valsel_final['QWK']:.4f}, "
+            f"MAE={valsel_final['MAE']:.4f}, RMSE={valsel_final['RMSE']:.4f} | "
+            f"Gap(tr-val)={train_valsel_gap:+.4f}"
         )
     return fold_summary
 
@@ -330,6 +408,8 @@ def run_sdpred_experiment(
         'embed_dim': 128,
         'dropout': 0.5,
         'selection_metric': 'MacroF1',
+        'profile_self_correction': False,
+        'eval_test': False,
         'device': None,
     }
     if overrides:
@@ -337,28 +417,33 @@ def run_sdpred_experiment(
             if v is not None:
                 cfg[k] = v
 
+    use_self_corr = bool(cfg.get('profile_self_correction', False))
+    eval_test = bool(cfg.get('eval_test', False))
+    method_name = 'SDPred_selfcorr' if use_self_corr else 'SDPred'
+
     folds = get_fold_list(mode=mode, custom_folds=custom_folds)
     device = get_device(cfg.get('device'))
     static_views = _load_sdpred_static_views()
 
     if verbose:
         print(
-            f"=== Running SDPred | Split {split_type} | Mode={mode} (folds={folds}) | "
-            f"Device={device} | Epochs={cfg['epochs']} | Resume={resume} ==="
+            f"=== Running {method_name} | Split {split_type} | Mode={mode} (folds={folds}) | "
+            f"Device={device} | Epochs={cfg['epochs']} | SelfCorr={use_self_corr} | Resume={resume} ==="
         )
 
     fold_summaries = []
     for fold in folds:
         if resume:
             cached = try_restore_baseline_fold(
-                'SDPred', split_type, fold, results_dir, drive_dir=drive_dir, has_rmse_sel=True
+                method_name, split_type, fold, results_dir,
+                drive_dir=drive_dir, has_rmse_sel=True, eval_test=eval_test,
             )
             if cached is not None:
                 if verbose:
-                    tm = cached['test_metrics']
+                    vm = cached['valsel_metrics']
                     print(
-                        f"  [RESUME] Skipping SDPred_{split_type} Fold {fold} "
-                        f"(MacroF1={tm['MacroF1']:.4f}, RMSE={tm['RMSE']:.4f})"
+                        f"  [RESUME] Skipping {method_name}_{split_type} Fold {fold} "
+                        f"(valsel MacroF1={vm['MacroF1']:.4f}, RMSE={vm['RMSE']:.4f})"
                     )
                 fold_summaries.append(cached)
                 continue
@@ -376,7 +461,7 @@ def run_sdpred_experiment(
         fold_summaries.append(s)
 
     return finalize_baseline_experiment(
-        method_name='SDPred',
+        method_name=method_name,
         split_type=split_type,
         mode=mode,
         folds=folds,
@@ -397,6 +482,8 @@ def main():
     parser.add_argument('--epochs', type=int, default=None)
     parser.add_argument('--batch_size', type=int, default=None)
     parser.add_argument('--lr', type=float, default=None)
+    parser.add_argument('--profile_self_correction', type=int, default=None, choices=[0, 1])
+    parser.add_argument('--eval_test', action='store_true')
     parser.add_argument('--device', type=str, default=None)
     parser.add_argument('--results_dir', type=str, default=DEFAULT_RESULTS_V2_DIR)
     parser.add_argument('--drive_dir', type=str, default=None)
@@ -414,6 +501,10 @@ def main():
             'epochs': args.epochs,
             'batch_size': args.batch_size,
             'lr': args.lr,
+            'profile_self_correction': (
+                bool(args.profile_self_correction) if args.profile_self_correction is not None else None
+            ),
+            'eval_test': bool(args.eval_test),
             'device': args.device,
         },
         verbose=True,

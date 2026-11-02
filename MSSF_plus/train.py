@@ -68,10 +68,13 @@ def evaluate_loader(
         s_avail = batch['se_avail'].to(device)
         fb_d9 = batch['fallback_d9'].to(device)
         fb_d10 = batch['fallback_d10'].to(device)
+        d_idx = batch['drug_idx'].to(device)
+        s_idx = batch['se_idx'].to(device)
 
         logits, _, _, _, _, _, _, _ = model(
             drugs, sides, drug_avail=d_avail, se_avail=s_avail,
-            fallback_d9=fb_d9, fallback_d10=fb_d10
+            fallback_d9=fb_d9, fallback_d10=fb_d10,
+            drug_idx=d_idx, se_idx=s_idx,
         )
         probs = logits_to_probs(logits, loss_type=loss_type)
         all_probs.append(probs.cpu().numpy())
@@ -94,6 +97,45 @@ def evaluate_loader(
     return metrics, y_true_class, y_pred_class, probs_arr
 
 
+_FOLD_PREP_CACHE: Dict[tuple, tuple] = {}
+
+
+def _get_or_build_fold_prep(fold: int, split_type: str, cfg: dict, fold_seed: int):
+    cache_key = (
+        str(split_type),
+        int(fold),
+        int(fold_seed),
+        str(cfg.get('c1_impute', 'zero')),
+        int(cfg.get('c1_imputer_epochs', cfg.get('c1_impute_epochs', 80))),
+        int(cfg.get('c1_diffusion_epochs', 100)),
+        int(cfg.get('c1_diffusion_steps', 25)),
+        int(cfg.get('c1_diffusion_samples', 10)),
+        str(cfg.get('c2_se_mode', 'original')),
+        str(cfg.get('c5_mode', 'none')),
+        float(cfg.get('c5_alpha', 0.15)),
+        int(cfg.get('c5_k_min', 4)),
+        int(cfg.get('c5_k_max', 12)),
+        int(cfg.get('c5_min_samples', 3)),
+    )
+    if cache_key in _FOLD_PREP_CACHE:
+        return _FOLD_PREP_CACHE[cache_key]
+
+    t_prep0 = time.time()
+    set_global_seed(fold_seed)
+    fold_split = load_fold_data(fold, split_type)
+    # Run small entity-level view imputer (N <= 600 drugs) on CPU for minimal launch overhead
+    fold_views = build_fold_views(fold_split, cfg, device='cpu')
+    soft_res = build_soft_targets(fold_split, fold_views, cfg)
+    prep_elapsed = time.time() - t_prep0
+
+    # Keep up to 6 fold entries (~300 MB max) so dev folds [0, 1, 2] stay cached across C3 runs
+    if len(_FOLD_PREP_CACHE) >= 6:
+        oldest_key = next(iter(_FOLD_PREP_CACHE))
+        del _FOLD_PREP_CACHE[oldest_key]
+    _FOLD_PREP_CACHE[cache_key] = (fold_split, fold_views, soft_res, prep_elapsed)
+    return fold_split, fold_views, soft_res, prep_elapsed
+
+
 def run_single_fold(
     fold: int,
     split_type: str,
@@ -104,27 +146,27 @@ def run_single_fold(
 ) -> dict:
     """
     Train, select best checkpoint on `val_select`, calibrate C4 on `val_calib`,
-    and evaluate once on `test` for a single fold.
+    and evaluate on `val_select` (and optionally `test` only when `eval_test=True` in Stage 7).
     """
-    t0 = time.time()
     base_seed = int(cfg.get('seed', 42))
     fold_seed = base_seed + int(fold)
-    set_global_seed(fold_seed)
 
     exp_name = str(cfg.get('exp_name', 'MSSF_plus'))
     loss_type = str(cfg.get('c3_loss_type', 'ce'))
     c5_mode = str(cfg.get('c5_mode', 'none'))
     selection_metric = str(cfg.get('selection_metric', 'MacroF1'))
     epochs = int(cfg.get('epochs', 50))
+    eval_test = bool(cfg.get('eval_test', False))
 
-    # 1. Load 4-way split
-    fold_split = load_fold_data(fold, split_type)
+    # 1-3. Load 4-way split, construct leak-free views (C1/C2) and C5 soft labels
+    fold_split, fold_views, soft_res, prep_elapsed = _get_or_build_fold_prep(
+        fold, split_type, cfg, fold_seed
+    )
 
-    # 2. Construct leak-free views (including C1 imputation & C2 ontology views)
-    fold_views = build_fold_views(fold_split, cfg, device=device)
-
-    # 3. Construct C5 soft labels on training pairs only
-    soft_res = build_soft_targets(fold_split, fold_views, cfg)
+    # Reset seed right before DataLoader & Model init so initial weights and batch shuffling
+    # are strictly invariant to RNG calls inside C1/C5 preprocessing
+    t_train0 = time.time()
+    set_global_seed(fold_seed)
 
     # 4. Build DataLoaders
     train_loader, valsel_loader, valcal_loader, test_loader = build_dataloaders(
@@ -140,6 +182,8 @@ def run_single_fold(
         n_drug_views=n_drug_views,
         n_se_views=n_se_views,
         profile_drug_view_indices=fold_views.profile_drug_view_indices,
+        profile_se_view_indices=fold_views.profile_se_view_indices,
+        drug_side_train=fold_views.drug_side_train,
         n_clusters=soft_res.n_clusters,
     ).to(device)
 
@@ -159,14 +203,18 @@ def run_single_fold(
 
     best_epoch = 1
     best_valsel_score = -float('inf')
+    best_train_macro_f1 = 0.0
     best_state_dict = copy.deepcopy(model.state_dict())
 
     use_soft_targets = c5_mode != 'none'
+    epoch_valsel_curve = []
 
     for epoch in range(1, epochs + 1):
         model.train()
         running_loss = 0.0
         n_batches = 0
+        epoch_train_preds = []
+        epoch_train_labels = []
 
         for batch in train_loader:
             drugs = batch['drug_feat'].to(device)
@@ -175,6 +223,8 @@ def run_single_fold(
             s_avail = batch['se_avail'].to(device)
             fb_d9 = batch['fallback_d9'].to(device)
             fb_d10 = batch['fallback_d10'].to(device)
+            d_idx = batch['drug_idx'].to(device)
+            s_idx = batch['se_idx'].to(device)
             hard_labels = batch['label'].to(device)
             soft_targets = batch['soft_target'].to(device) if use_soft_targets else None
             cluster_ids = batch['cluster_id'].to(device)
@@ -184,6 +234,7 @@ def run_single_fold(
                 drugs, sides,
                 drug_avail=d_avail, se_avail=s_avail,
                 fallback_d9=fb_d9, fallback_d10=fb_d10,
+                drug_idx=d_idx, se_idx=s_idx,
             )
 
             loss = criterion(
@@ -203,18 +254,30 @@ def run_single_fold(
             loss.backward()
             optimizer.step()
 
+            with torch.no_grad():
+                b_probs = logits_to_probs(logits.detach(), loss_type=loss_type)
+                epoch_train_preds.append(torch.argmax(b_probs, dim=-1).cpu().numpy())
+                epoch_train_labels.append(batch['label'].numpy())
+
             running_loss += float(loss.item())
             n_batches += 1
 
-        # Evaluate ONLY on val_select (10%) for checkpoint selection
+        tr_y_true = np.concatenate(epoch_train_labels).astype(np.int64)
+        tr_y_pred = np.concatenate(epoch_train_preds).astype(np.int64)
+        train_ep_metrics = compute_multiclass_metrics(tr_y_true, tr_y_pred)
+        train_ep_macro_f1 = float(train_ep_metrics['MacroF1'])
+
+        # Evaluate ONLY on val_select for checkpoint selection
         valsel_metrics, _, _, _ = evaluate_loader(
             model, valsel_loader, loss_type=loss_type, device=device,
             expected_pairs=fold_split.valsel
         )
         score = float(valsel_metrics[selection_metric])
+        epoch_valsel_curve.append(float(valsel_metrics['MacroF1']))
         if score > best_valsel_score:
             best_valsel_score = score
             best_epoch = epoch
+            best_train_macro_f1 = train_ep_macro_f1
             best_state_dict = copy.deepcopy(model.state_dict())
 
         if verbose and (epoch == 1 or epoch % 10 == 0 or epoch == epochs):
@@ -222,13 +285,14 @@ def run_single_fold(
             print(
                 f"  [{exp_name} Split {split_type} Fold {fold}] "
                 f"Epoch {epoch:02d}/{epochs:02d} | Loss={avg_loss:.4f} | "
+                f"train MacroF1={train_ep_macro_f1:.4f} | "
                 f"valsel {selection_metric}={score:.4f} (best={best_valsel_score:.4f} @ ep {best_epoch})"
             )
 
     # Restore best checkpoint selected on val_select
     model.load_state_dict(best_state_dict)
 
-    # Final evaluation on val_select, val_calib, and test (once!)
+    # Final evaluation on val_select and val_calib
     valsel_final, valsel_true_c, _, valsel_probs = evaluate_loader(
         model, valsel_loader, loss_type=loss_type, device=device,
         expected_pairs=fold_split.valsel
@@ -237,50 +301,80 @@ def run_single_fold(
         model, valcal_loader, loss_type=loss_type, device=device,
         expected_pairs=fold_split.valcal
     )
-    test_metrics, test_true_c, test_pred_c, test_probs = evaluate_loader(
-        model, test_loader, loss_type=loss_type, device=device,
-        expected_pairs=fold_split.test
-    )
 
-    # C4: Post-hoc ordinal conformal prediction calibrated on val_calib -> evaluated on test
+    # C4 calibrated on val_calib -> evaluated on val_select (for Stages 1-6 before test is opened)
     c4_alpha = float(cfg.get('c4_alpha', 0.10))
-    conformal_res = evaluate_all_conformal_methods(
+    valsel_conformal = evaluate_all_conformal_methods(
         valcal_probs=valcal_probs,
         valcal_labels_1_to_5=valcal_true_c + 1,
-        test_probs=test_probs,
-        test_labels_1_to_5=test_true_c + 1,
+        test_probs=valsel_probs,
+        test_labels_1_to_5=valsel_true_c + 1,
         alpha=c4_alpha,
         seed=fold_seed,
+        test_drug_ids=fold_split.valsel[:, 0].astype(int),
     )
 
-    # Save fold predictions in unified_eval.py format
     method_dir = os.path.join(results_dir, f'{exp_name}_{split_type}')
-    save_fold_predictions(
-        method_dir=method_dir,
-        fold=fold,
-        test_split=fold_split.test,
-        y_true_class=test_true_c,
-        y_pred_class=test_pred_c,
-        probs_5class=test_probs,
-        valcal_true_class=valcal_true_c,
-        valcal_probs_5class=valcal_probs,
-        valsel_true_class=valsel_true_c,
-        valsel_probs_5class=valsel_probs,
-    )
+    os.makedirs(method_dir, exist_ok=True)
 
-    elapsed = time.time() - t0
+    # Save valsel and valcal arrays always; only evaluate & save test when eval_test=True (Stage 7)
+    np.save(os.path.join(method_dir, f'fold_{fold}_valcal_labels.npy'), valcal_true_c.astype(np.int64))
+    np.save(os.path.join(method_dir, f'fold_{fold}_valcal_probs.npy'), valcal_probs.astype(np.float32))
+    np.save(os.path.join(method_dir, f'fold_{fold}_valsel_labels.npy'), valsel_true_c.astype(np.int64))
+    np.save(os.path.join(method_dir, f'fold_{fold}_valsel_probs.npy'), valsel_probs.astype(np.float32))
+
+    if eval_test:
+        test_metrics, test_true_c, test_pred_c, test_probs = evaluate_loader(
+            model, test_loader, loss_type=loss_type, device=device,
+            expected_pairs=fold_split.test
+        )
+        conformal_res = evaluate_all_conformal_methods(
+            valcal_probs=valcal_probs,
+            valcal_labels_1_to_5=valcal_true_c + 1,
+            test_probs=test_probs,
+            test_labels_1_to_5=test_true_c + 1,
+            alpha=c4_alpha,
+            seed=fold_seed,
+            test_drug_ids=fold_split.test[:, 0].astype(int),
+        )
+        save_fold_predictions(
+            method_dir=method_dir,
+            fold=fold,
+            test_split=fold_split.test,
+            y_true_class=test_true_c,
+            y_pred_class=test_pred_c,
+            probs_5class=test_probs,
+            valcal_true_class=valcal_true_c,
+            valcal_probs_5class=valcal_probs,
+            valsel_true_class=valsel_true_c,
+            valsel_probs_5class=valsel_probs,
+        )
+    else:
+        test_metrics = None
+        conformal_res = valsel_conformal
+
+    train_eval_elapsed = time.time() - t_train0
+    elapsed = float(prep_elapsed + train_eval_elapsed)
+    train_valsel_gap = float(best_train_macro_f1 - float(valsel_final['MacroF1']))
+
     fold_summary = {
         'exp_name': exp_name,
         'split_type': split_type,
         'fold': int(fold),
         'best_epoch': int(best_epoch),
         'best_valsel_score': float(best_valsel_score),
+        'best_train_macro_f1': float(best_train_macro_f1),
+        'train_valsel_macro_f1_gap': float(train_valsel_gap),
+        'epoch_valsel_macro_f1_curve': epoch_valsel_curve,
         'valsel_metrics': valsel_final,
+        'valsel_conformal': valsel_conformal,
         'test_metrics': test_metrics,
         'conformal': conformal_res,
         'c5_diagnostics': soft_res.diagnostics,
         'n_drug_views': int(n_drug_views),
         'n_se_views': int(n_se_views),
+        'prep_elapsed_seconds': float(prep_elapsed),
+        'train_eval_elapsed_seconds': float(train_eval_elapsed),
         'elapsed_seconds': float(elapsed),
     }
 
@@ -288,12 +382,12 @@ def run_single_fold(
         json.dump(fold_summary, f, indent=2)
 
     if verbose:
-        ord_aps = conformal_res['Ordinal_APS']
+        ord_aps = valsel_conformal['Ordinal_APS']
         print(
             f"  --> Fold {fold} Done ({elapsed:.1f}s) | Best Epoch={best_epoch} | "
-            f"Test MacroF1={test_metrics['MacroF1']:.4f}, QWK={test_metrics['QWK']:.4f}, "
-            f"MAE={test_metrics['MAE']:.4f}, Acc={test_metrics['Accuracy']:.4f} | "
-            f"Ord-APS Cov={ord_aps['empirical_coverage']:.3f}, Size={ord_aps['avg_set_size']:.2f}"
+            f"valsel MacroF1={valsel_final['MacroF1']:.4f}, QWK={valsel_final['QWK']:.4f}, "
+            f"MAE={valsel_final['MAE']:.4f} | Gap(tr-val)={train_valsel_gap:+.4f} | "
+            f"valsel Ord-APS Cov={ord_aps['empirical_coverage']:.3f}, Size={ord_aps['avg_set_size']:.2f}"
         )
 
     return fold_summary
@@ -320,29 +414,32 @@ def _try_restore_completed_fold(
     drive_dir: Optional[str],
     method_folder: str,
     fold: int,
+    eval_test: bool = False,
 ) -> Optional[dict]:
     """
-    If fold outputs (`labels.npy`, `preds.npy`, `probs.npy`, `summary.json`) already exist
-    locally or in `drive_dir`, restore them locally and return the loaded fold_summary.
+    If fold outputs already exist locally or in `drive_dir`, restore them locally
+    and return the loaded fold_summary.
     """
     import shutil
-    req_files = [
+    base_req_files = [
+        f'fold_{fold}_valsel_labels.npy',
+        f'fold_{fold}_valsel_probs.npy',
+        f'fold_{fold}_valcal_labels.npy',
+        f'fold_{fold}_valcal_probs.npy',
+        f'fold_{fold}_summary.json',
+    ]
+    test_req_files = [
         f'fold_{fold}_labels.npy',
         f'fold_{fold}_preds.npy',
         f'fold_{fold}_probs.npy',
-        f'fold_{fold}_summary.json',
     ]
-    opt_files = [
-        f'fold_{fold}_valcal_labels.npy',
-        f'fold_{fold}_valcal_probs.npy',
-        f'fold_{fold}_valsel_labels.npy',
-        f'fold_{fold}_valsel_probs.npy',
-    ]
+    req_files = base_req_files + (test_req_files if eval_test else [])
+
     if drive_dir:
         drive_method_dir = os.path.join(drive_dir, method_folder)
         if os.path.isdir(drive_method_dir):
             os.makedirs(method_dir, exist_ok=True)
-            for fname in req_files + opt_files:
+            for fname in req_files:
                 local_p = os.path.join(method_dir, fname)
                 drive_p = os.path.join(drive_method_dir, fname)
                 if not os.path.exists(local_p) and os.path.exists(drive_p):
@@ -350,7 +447,9 @@ def _try_restore_completed_fold(
 
     if all(os.path.exists(os.path.join(method_dir, f)) for f in req_files):
         with open(os.path.join(method_dir, f'fold_{fold}_summary.json'), 'r', encoding='utf-8') as f:
-            return json.load(f)
+            summary_data = json.load(f)
+        if 'best_train_macro_f1' in summary_data:
+            return summary_data
     return None
 
 
@@ -371,6 +470,7 @@ def run_experiment(
     """
     overrides = cli_overrides or {}
     cfg = get_experiment_config(exp_name, **overrides)
+    eval_test = bool(cfg.get('eval_test', False))
     folds = get_fold_list(mode=mode, custom_folds=custom_folds)
     device = get_device(cfg.get('device', None))
     method_folder = f'{exp_name}_{split_type}'
@@ -379,19 +479,22 @@ def run_experiment(
     if verbose:
         print(
             f"=== Running {exp_name} | Split {split_type} | Mode={mode} (folds={folds}) | "
-            f"Device={device} | Epochs={cfg['epochs']} | Resume={resume} ==="
+            f"Device={device} | Epochs={cfg['epochs']} | SelfCorr={cfg.get('profile_self_correction', False)} | "
+            f"Resume={resume} ==="
         )
 
     fold_summaries = []
     for fold in folds:
         if resume:
-            cached = _try_restore_completed_fold(method_dir, drive_dir, method_folder, fold)
+            cached = _try_restore_completed_fold(
+                method_dir, drive_dir, method_folder, fold, eval_test=eval_test
+            )
             if cached is not None:
                 if verbose:
-                    tm = cached['test_metrics']
+                    vm = cached['valsel_metrics']
                     print(
                         f"  [RESUME] Skipping {method_folder} Fold {fold} (already completed: "
-                        f"MacroF1={tm['MacroF1']:.4f}, QWK={tm['QWK']:.4f})"
+                        f"valsel MacroF1={vm['MacroF1']:.4f}, QWK={vm['QWK']:.4f})"
                     )
                 fold_summaries.append(cached)
                 _sync_method_dir(method_dir, drive_dir, method_folder)
@@ -408,15 +511,24 @@ def run_experiment(
         fold_summaries.append(summary)
         _sync_method_dir(method_dir, drive_dir, method_folder)
 
-    # Aggregate test and val_select classification metrics across folds
-    test_mean, test_std = aggregate_fold_metrics([s['test_metrics'] for s in fold_summaries])
+    # Aggregate val_select classification metrics across folds
     valsel_mean, valsel_std = aggregate_fold_metrics([s['valsel_metrics'] for s in fold_summaries])
+    gaps = [float(s.get('train_valsel_macro_f1_gap', float('nan'))) for s in fold_summaries]
+    gap_mean = float(np.nanmean(gaps)) if gaps else float('nan')
+    gap_std = float(np.nanstd(gaps)) if gaps else float('nan')
+
+    test_list = [s['test_metrics'] for s in fold_summaries if s.get('test_metrics') is not None]
+    if test_list and len(test_list) == len(fold_summaries):
+        test_mean, test_std = aggregate_fold_metrics(test_list)
+        test_summary = {'mean': test_mean, 'std': test_std}
+    else:
+        test_summary = None
 
     # Aggregate C4 conformal metrics across folds for each of the 4 methods
     agg_conformal = {}
     for c4_method in ['LAC', 'APS', 'Ordinal_LAC', 'Ordinal_APS']:
         c_mean, c_std = aggregate_fold_metrics(
-            [s['conformal'][c4_method] for s in fold_summaries]
+            [s.get('valsel_conformal', s['conformal'])[c4_method] for s in fold_summaries]
         )
         agg_conformal[c4_method] = {'mean': c_mean, 'std': c_std}
 
@@ -427,7 +539,8 @@ def run_experiment(
         'folds': folds,
         'config': cfg,
         'valsel_summary': {'mean': valsel_mean, 'std': valsel_std},
-        'test_summary': {'mean': test_mean, 'std': test_std},
+        'train_valsel_gap_summary': {'mean': gap_mean, 'std': gap_std},
+        'test_summary': test_summary,
         'conformal_summary': agg_conformal,
         'fold_summaries': fold_summaries,
     }
@@ -442,13 +555,14 @@ def run_experiment(
 
     if verbose:
         print(
-            f"=== Summary {exp_name} (Split {split_type}, {len(folds)} folds) ===\n"
-            f"  MacroF1    : {test_mean['MacroF1']:.4f} +/- {test_std['MacroF1']:.4f}\n"
-            f"  WeightedF1 : {test_mean['WeightedF1']:.4f} +/- {test_std['WeightedF1']:.4f}\n"
-            f"  Accuracy   : {test_mean['Accuracy']:.4f} +/- {test_std['Accuracy']:.4f}\n"
-            f"  QWK        : {test_mean['QWK']:.4f} +/- {test_std['QWK']:.4f}\n"
-            f"  MAE        : {test_mean['MAE']:.4f} +/- {test_std['MAE']:.4f}\n"
-            f"  Saved to   : {summary_path}"
+            f"=== Summary {exp_name} (Split {split_type}, {len(folds)} folds, val_select) ===\n"
+            f"  valsel MacroF1    : {valsel_mean['MacroF1']:.4f} +/- {valsel_std['MacroF1']:.4f}\n"
+            f"  valsel WeightedF1 : {valsel_mean['WeightedF1']:.4f} +/- {valsel_std['WeightedF1']:.4f}\n"
+            f"  valsel Accuracy   : {valsel_mean['Accuracy']:.4f} +/- {valsel_std['Accuracy']:.4f}\n"
+            f"  valsel QWK        : {valsel_mean['QWK']:.4f} +/- {valsel_std['QWK']:.4f}\n"
+            f"  valsel MAE        : {valsel_mean['MAE']:.4f} +/- {valsel_std['MAE']:.4f}\n"
+            f"  Gap (train-valsel): {gap_mean:+.4f} +/- {gap_std:.4f}\n"
+            f"  Saved to          : {summary_path}"
         )
 
     return exp_summary
@@ -474,6 +588,8 @@ def main():
     parser.add_argument('--results_dir', type=str, default=DEFAULT_RESULTS_V2_DIR)
     parser.add_argument('--drive_dir', type=str, default=None, help='Optional Google Drive backup directory')
     parser.add_argument('--resume', action='store_true', help='Skip already completed folds')
+    parser.add_argument('--profile_self_correction', type=int, choices=[0, 1], default=None)
+    parser.add_argument('--eval_test', action='store_true', help='Only enable in Stage 7 after final approval')
     args = parser.parse_args()
 
     overrides = {}
@@ -487,6 +603,10 @@ def main():
         overrides['lr'] = args.lr
     if args.device is not None:
         overrides['device'] = args.device
+    if args.profile_self_correction is not None:
+        overrides['profile_self_correction'] = bool(args.profile_self_correction)
+    if args.eval_test:
+        overrides['eval_test'] = True
 
     run_experiment(
         exp_name=args.exp,

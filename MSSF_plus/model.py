@@ -18,6 +18,7 @@ import torch
 import torch.nn as nn
 
 from MSSF_plus.protocol import N_DRUGS, N_SIDES
+from MSSF_plus.views import compute_batch_self_corrected_profiles
 
 
 class GaussianParametrizer(nn.Module):
@@ -209,7 +210,7 @@ class Preprocess(nn.Module):
 
 
 class CrossProduction(nn.Module):
-    def __init__(self, cross_dim: int, feature_dim: int, input_channel: int):
+    def __init__(self, cross_dim: int, feature_dim: int, input_channel: int, use_factored: bool = True):
         super().__init__()
         self.cross_dim = cross_dim
         self.feature_dim = feature_dim
@@ -217,6 +218,7 @@ class CrossProduction(nn.Module):
         self.strides = 4
         self.latent_channel = 32
         self.input_channel = input_channel
+        self.use_factored = bool(use_factored)
 
         self.cnn = nn.Sequential(
             nn.Conv2d(self.input_channel, self.latent_channel, kernel_size=self.kernel_size, stride=self.strides),
@@ -231,6 +233,51 @@ class CrossProduction(nn.Module):
         )
 
     def forward(self, drugs: List[torch.Tensor], sides: List[torch.Tensor]) -> torch.Tensor:
+        if (
+            self.use_factored
+            and self.kernel_size == self.strides
+            and self.cross_dim % self.kernel_size == 0
+            and len(drugs) * len(sides) == self.input_channel
+        ):
+            # Exact algebraic identity for Conv2d(k=4, s=4) applied to outer products d_v (x) s_u:
+            # Avoids materializing the (B, V_d * V_s, 128, 128) tensor (~1.84 GB/batch)
+            b = drugs[0].shape[0]
+            vd = len(drugs)
+            vs = len(sides)
+            k = self.kernel_size
+            g = self.cross_dim // k
+            c_out = self.latent_channel
+
+            d_flat = (
+                torch.stack(drugs, dim=1)
+                .view(b, vd, g, k)
+                .permute(0, 2, 1, 3)
+                .reshape(b * g, vd * k)
+            )
+            w_flat = (
+                self.cnn[0]
+                .weight.view(c_out, vd, vs, k, k)
+                .permute(1, 3, 0, 2, 4)
+                .reshape(vd * k, c_out * vs * k)
+            )
+            m = torch.mm(d_flat, w_flat).view(b, g * c_out, vs * k)
+            s_flat = (
+                torch.stack(sides, dim=1)
+                .view(b, vs, g, k)
+                .permute(0, 1, 3, 2)
+                .reshape(b, vs * k, g)
+            )
+            conv0_out = (
+                torch.bmm(m, s_flat)
+                .view(b, g, c_out, g)
+                .permute(0, 2, 1, 3)
+                .contiguous()
+            )
+            if self.cnn[0].bias is not None:
+                conv0_out = conv0_out + self.cnn[0].bias.view(1, c_out, 1, 1)
+            x = self.cnn[1:](conv0_out).view(-1, self.feature_dim)
+            return x
+
         crosspro = []
         for d_emb in drugs:
             for s_emb in sides:
@@ -288,7 +335,7 @@ class AvailabilityModulator(nn.Module):
 
 class MSSFPlusModel(nn.Module):
     """
-    Full MSSF_plus model supporting C1, C2, C3, and C5 extensions.
+    Full MSSF_plus model supporting C1, C2, C3, C5, profile_self_correction, and BVI ablation.
     """
 
     def __init__(
@@ -297,6 +344,8 @@ class MSSFPlusModel(nn.Module):
         n_drug_views: int = 11,
         n_se_views: int = 4,
         profile_drug_view_indices: Optional[List[int]] = None,
+        profile_se_view_indices: Optional[List[int]] = None,
+        drug_side_train: Optional[np.ndarray] = None,
         n_clusters: int = 0,
     ):
         super().__init__()
@@ -304,6 +353,10 @@ class MSSFPlusModel(nn.Module):
         self.n_drug_views = int(n_drug_views)
         self.n_se_views = int(n_se_views)
         self.profile_drug_view_indices = list(profile_drug_view_indices or [])
+        if profile_se_view_indices is not None:
+            self.profile_se_view_indices = list(profile_se_view_indices)
+        else:
+            self.profile_se_view_indices = [2, 3] if self.n_se_views >= 4 else []
         self.n_clusters = int(n_clusters)
 
         dropout = float(cfg.get('dropout', 0.3))
@@ -314,6 +367,30 @@ class MSSFPlusModel(nn.Module):
         self.use_availability = bool(cfg.get('c1_use_availability', False))
         self.view_dropout_prob = float(cfg.get('c1_view_dropout_prob', 0.0))
         self.aux_cluster_weight = float(cfg.get('c5_aux_cluster_weight', 0.0))
+        self.profile_self_correction = bool(cfg.get('profile_self_correction', False))
+        self.use_factored_crossprod = bool(cfg.get('use_factored_crossprod', True))
+        self.use_bvi = bool(cfg.get('use_bvi', True))
+
+        if self.profile_self_correction and drug_side_train is not None:
+            y_np = np.asarray(drug_side_train, dtype=np.float32)
+            b_np = (y_np > 0.0).astype(np.float32)
+            g_d9_np = y_np @ y_np.T
+            g_d10_np = b_np @ b_np.T
+            g_s3_np = y_np.T @ y_np
+            g_s4_np = b_np.T @ b_np
+
+            self.register_buffer('_sc_y_train', torch.from_numpy(y_np), persistent=False)
+            self.register_buffer('_sc_b_train', torch.from_numpy(b_np), persistent=False)
+            self.register_buffer('_sc_g_d9', torch.from_numpy(g_d9_np), persistent=False)
+            self.register_buffer('_sc_norm2_d9', torch.from_numpy(np.diag(g_d9_np).copy()), persistent=False)
+            self.register_buffer('_sc_g_d10', torch.from_numpy(g_d10_np), persistent=False)
+            self.register_buffer('_sc_norm2_d10', torch.from_numpy(np.diag(g_d10_np).copy()), persistent=False)
+            self.register_buffer('_sc_g_s3', torch.from_numpy(g_s3_np), persistent=False)
+            self.register_buffer('_sc_norm2_s3', torch.from_numpy(np.diag(g_s3_np).copy()), persistent=False)
+            self.register_buffer('_sc_g_s4', torch.from_numpy(g_s4_np), persistent=False)
+            self.register_buffer('_sc_norm2_s4', torch.from_numpy(np.diag(g_s4_np).copy()), persistent=False)
+        else:
+            self._sc_y_train = None
 
         if self.use_availability:
             self.drug_modulator = AvailabilityModulator(self.n_drug_views, N_DRUGS)
@@ -353,9 +430,18 @@ class MSSFPlusModel(nn.Module):
             cross_dim=128,
             feature_dim=128,
             input_channel=self.feature_nums,
+            use_factored=self.use_factored_crossprod,
         )
         self.attention = Attention(inputdim=128 * 3, heads=4)
-        self.gaussian_parametrizer = GaussianParametrizer(feature_dim=128 * 3, latent_dim=gp_dim)
+        if self.use_bvi:
+            self.gaussian_parametrizer = GaussianParametrizer(feature_dim=128 * 3, latent_dim=gp_dim)
+            self.det_projector = None
+        else:
+            self.gaussian_parametrizer = None
+            self.det_projector = nn.Sequential(
+                nn.Linear(128 * 3, gp_dim),
+                nn.Dropout(dropout),
+            )
         self.classifier = Classifier(latent_dim=gp_dim, classes=out_classes, dropout=dropout)
 
         if self.aux_cluster_weight > 0.0 and self.n_clusters >= 2:
@@ -370,6 +456,79 @@ class MSSFPlusModel(nn.Module):
             return eps.mul(std).add_(mu)
         return mu
 
+    def _apply_profile_self_correction(
+        self,
+        drugs: torch.Tensor,
+        sides: torch.Tensor,
+        drug_avail: Optional[torch.Tensor],
+        se_avail: Optional[torch.Tensor],
+        drug_idx: Optional[torch.Tensor],
+        se_idx: Optional[torch.Tensor],
+    ) -> Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]:
+        if (
+            not self.profile_self_correction
+            or self._sc_y_train is None
+            or drug_idx is None
+            or se_idx is None
+        ):
+            return drugs, sides, drug_avail, se_avail
+
+        y_ds = self._sc_y_train[drug_idx, se_idx]
+        if not self.training:
+            # Evaluation invariant: val/test pairs are absent from Y_train -> y_ds must be 0
+            assert torch.all(y_ds == 0.0), (
+                "CRITICAL: Evaluation pair found with non-zero entry in Y_train during profile_self_correction!"
+            )
+            return drugs, sides, drug_avail, se_avail
+
+        if not torch.any(y_ds > 0.0):
+            return drugs, sides, drug_avail, se_avail
+
+        d9_corr, d10_corr, s3_corr, s4_corr = compute_batch_self_corrected_profiles(
+            drug_idx=drug_idx,
+            se_idx=se_idx,
+            y_train=self._sc_y_train,
+            b_train=self._sc_b_train,
+            g_d9=self._sc_g_d9,
+            norm2_d9=self._sc_norm2_d9,
+            g_d10=self._sc_g_d10,
+            norm2_d10=self._sc_norm2_d10,
+            g_s3=self._sc_g_s3,
+            norm2_s3=self._sc_norm2_s3,
+            g_s4=self._sc_g_s4,
+            norm2_s4=self._sc_norm2_s4,
+        )
+
+        b = drugs.shape[0]
+        if len(self.profile_drug_view_indices) == 2:
+            idx9, idx10 = self.profile_drug_view_indices[0], self.profile_drug_view_indices[1]
+            drugs_3d = drugs.view(b, self.n_drug_views, N_DRUGS).clone()
+            drugs_3d[:, idx9, :] = d9_corr
+            drugs_3d[:, idx10, :] = d10_corr
+            drugs = drugs_3d.reshape(b, self.n_drug_views * N_DRUGS)
+            if drug_avail is not None:
+                # If a drug had only this single pair in Y_train, its leave-one-pair-out profile is empty
+                rem_norm2 = self._sc_norm2_d9[drug_idx] - y_ds * y_ds
+                still_avail = (rem_norm2 > 1e-12).to(drug_avail.dtype)
+                drug_avail = drug_avail.clone()
+                drug_avail[:, idx9] = drug_avail[:, idx9] * still_avail
+                drug_avail[:, idx10] = drug_avail[:, idx10] * still_avail
+
+        if len(self.profile_se_view_indices) == 2:
+            s_idx3, s_idx4 = self.profile_se_view_indices[0], self.profile_se_view_indices[1]
+            sides_3d = sides.view(b, self.n_se_views, N_SIDES).clone()
+            sides_3d[:, s_idx3, :] = s3_corr
+            sides_3d[:, s_idx4, :] = s4_corr
+            sides = sides_3d.reshape(b, self.n_se_views * N_SIDES)
+            if se_avail is not None:
+                rem_se_norm2 = self._sc_norm2_s3[se_idx] - y_ds * y_ds
+                se_still_avail = (rem_se_norm2 > 1e-12).to(se_avail.dtype)
+                se_avail = se_avail.clone()
+                se_avail[:, s_idx3] = se_avail[:, s_idx3] * se_still_avail
+                se_avail[:, s_idx4] = se_avail[:, s_idx4] * se_still_avail
+
+        return drugs, sides, drug_avail, se_avail
+
     def _apply_c1_input_processing(
         self,
         drugs: torch.Tensor,
@@ -378,7 +537,12 @@ class MSSFPlusModel(nn.Module):
         se_avail: Optional[torch.Tensor],
         fallback_d9: Optional[torch.Tensor],
         fallback_d10: Optional[torch.Tensor],
+        drug_idx: Optional[torch.Tensor] = None,
+        se_idx: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        drugs, sides, drug_avail, se_avail = self._apply_profile_self_correction(
+            drugs, sides, drug_avail, se_avail, drug_idx, se_idx
+        )
         b = drugs.shape[0]
         if drug_avail is not None:
             d_avail = drug_avail.clone()
@@ -428,9 +592,12 @@ class MSSFPlusModel(nn.Module):
         se_avail: Optional[torch.Tensor] = None,
         fallback_d9: Optional[torch.Tensor] = None,
         fallback_d10: Optional[torch.Tensor] = None,
+        drug_idx: Optional[torch.Tensor] = None,
+        se_idx: Optional[torch.Tensor] = None,
     ):
         mod_drugs, mod_sides = self._apply_c1_input_processing(
-            drugs, sides, drug_avail, se_avail, fallback_d9, fallback_d10
+            drugs, sides, drug_avail, se_avail, fallback_d9, fallback_d10,
+            drug_idx=drug_idx, se_idx=se_idx,
         )
 
         feature1, rec_con = self.encoderConnection(mod_drugs, mod_sides)
@@ -441,8 +608,14 @@ class MSSFPlusModel(nn.Module):
         features = torch.cat((feature1, feature2, feature3), dim=1)
         features = self.attention(features)
 
-        mu, logvar = self.gaussian_parametrizer(features)
-        latent_features = self.reparameterize(mu, logvar)
+        if self.use_bvi:
+            mu, logvar = self.gaussian_parametrizer(features)
+            latent_features = self.reparameterize(mu, logvar)
+        else:
+            latent_features = self.det_projector(features)
+            mu = latent_features
+            logvar = torch.zeros_like(latent_features)
+
         logits = self.classifier(latent_features)
 
         cluster_logits = (

@@ -21,6 +21,7 @@ ABLATION_GROUPS: Dict[str, List[str]] = {
         'C1_avail_vdrop_drop',
         'C1_avail_vdrop_mean',
         'C1_avail_vdrop_regress',
+        'C1_regress_no_modulator',
         'C1_avail_vdrop_diffusion',
     ],
     'c2': [
@@ -35,8 +36,6 @@ ABLATION_GROUPS: Dict[str, List[str]] = {
         'C3_emd_weighted',
         'C3_corn_unweighted',
         'C3_corn_weighted',
-        'C3_softquant_unweighted',
-        'C3_softquant_weighted',
     ],
     'c5': [
         'MSSF_v2',
@@ -57,20 +56,36 @@ ABLATION_GROUPS: Dict[str, List[str]] = {
         'MSSF_v2',
         'MSSF_plus_full',
     ],
+    'stage2': [
+        'MSSF_v2',
+        'MSSF_v2_selfcorr',
+        'C3_ce_unweighted',
+        'C3_ce_unweighted_selfcorr',
+    ],
+    'bvi': [
+        'C3_ce_unweighted',
+        'full_no_bvi',
+    ],
 }
 
 
-def get_experiments_for_group(group: str) -> List[str]:
+def get_experiments_for_group(group: str, mode: str = 'dev') -> List[str]:
     if group == 'all':
         seen = []
-        for g in ['baseline', 'c1', 'c2', 'c3', 'c5', 'loo']:
+        for g in ['baseline', 'c1', 'c2', 'c3', 'c5', 'bvi', 'loo']:
             for exp in ABLATION_GROUPS[g]:
                 if exp not in seen:
                     seen.append(exp)
-        return seen
-    if group not in ABLATION_GROUPS:
+        exps = seen
+    elif group in ABLATION_GROUPS:
+        exps = list(ABLATION_GROUPS[group])
+    else:
         raise ValueError(f"Unknown group {group!r}; choose from {list(ABLATION_GROUPS.keys()) + ['all']}")
-    return ABLATION_GROUPS[group]
+
+    # Exclude C1_avail_vdrop_diffusion from 10-fold ('full') runs per Change 1 review decision
+    if mode == 'full':
+        exps = [e for e in exps if e != 'C1_avail_vdrop_diffusion']
+    return exps
 
 
 def main():
@@ -82,6 +97,13 @@ def main():
         choices=list(ABLATION_GROUPS.keys()) + ['all'],
         help='Ablation group to run',
     )
+    parser.add_argument(
+        '--exps',
+        type=str,
+        nargs='+',
+        default=None,
+        help='Optional explicit list of experiment names (overrides --group)',
+    )
     parser.add_argument('--splits', type=str, nargs='+', default=['B'], choices=['A', 'B'])
     parser.add_argument('--mode', type=str, default='dev', choices=['quick', 'dev', 'full'])
     parser.add_argument('--epochs', type=int, default=None)
@@ -91,6 +113,8 @@ def main():
     parser.add_argument('--results_dir', type=str, default=DEFAULT_RESULTS_V2_DIR)
     parser.add_argument('--drive_dir', type=str, default=None)
     parser.add_argument('--resume', action='store_true')
+    parser.add_argument('--profile_self_correction', type=int, choices=[0, 1], default=None)
+    parser.add_argument('--eval_test', action='store_true')
     args = parser.parse_args()
 
     overrides = {}
@@ -102,8 +126,15 @@ def main():
         overrides['batch_size'] = args.batch_size
     if args.device is not None:
         overrides['device'] = args.device
+    if args.profile_self_correction is not None:
+        overrides['profile_self_correction'] = bool(args.profile_self_correction)
+    if args.eval_test:
+        overrides['eval_test'] = True
 
-    exps = get_experiments_for_group(args.group)
+    if args.exps:
+        exps = list(args.exps)
+    else:
+        exps = get_experiments_for_group(args.group, mode=args.mode)
     for split_type in args.splits:
         for exp_name in exps:
             run_experiment(
