@@ -95,7 +95,7 @@ def dispatch_baseline(
 def main():
     parser = argparse.ArgumentParser(description='Unified Protocol v2 baseline dispatcher.')
     parser.add_argument(
-        '--baselines', type=str, nargs='+', required=True, choices=ALL_BASELINES,
+        '--baselines', '--models', dest='baselines', type=str, nargs='+', required=True, choices=ALL_BASELINES,
         help='One or more baselines to run',
     )
     parser.add_argument('--splits', type=str, nargs='+', default=['B'], choices=['A', 'B'])

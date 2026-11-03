@@ -71,6 +71,8 @@ BASE_CONFIG_TEXTCNN = {
 
 
 def _import_mvsl_network():
+    from MSSF_plus.baselines_rerun.dgl_shim import install_dgl_shim
+    install_dgl_shim()
     net_path = os.path.join(REPO_DIR, 'MVSL-DSF', 'Network.py')
     spec = importlib.util.spec_from_file_location('mvsl_network_mod', net_path)
     if spec is None or spec.loader is None:
@@ -82,6 +84,8 @@ def _import_mvsl_network():
 
 def _precompute_mvsl_static_features(se_source: str = 'mat') -> Tuple[np.ndarray, np.ndarray, list, np.ndarray]:
     """Precompute 750 SMILES one-hots, 2048-bit Morgan FPs, DGL AttentiveFP graphs, and 994x243 SE vectors."""
+    from MSSF_plus.baselines_rerun.dgl_shim import install_dgl_shim
+    install_dgl_shim()
     from rdkit import Chem
     from rdkit.Chem import AllChem
     import dgl
