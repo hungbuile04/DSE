@@ -216,9 +216,8 @@ def run_item2_ridge_vs_mlp_folds012(
         custom_folds=[0, 1, 2],
         results_dir=results_dir,
         drive_dir=drive_dir,
-        prefer_device=device_str,
-        eval_test=False,
         resume=True,
+        cli_overrides={'device': device_str, 'eval_test': False},
     )
 
     compare_models = [
@@ -242,7 +241,7 @@ def run_item2_ridge_vs_mlp_folds012(
         loaded_all[exp_n] = (imp_label, pf)
         for k in sorted(pf.keys()):
             m = pf[k]
-            f1s = m['PerClassF1']
+            f1s = [m['F1_c0'], m['F1_c1'], m['F1_c2'], m['F1_c3'], m['F1_c4']]
             print(
                 f"{exp_n:<33} | {imp_label:<20} | {k:>4d} | {int(m['best_epoch']):>3d} | "
                 f"{m['MacroF1']:>8.4f} | {m['QWK']:>8.4f} | {m['MAE']:>8.4f} | "
