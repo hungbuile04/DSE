@@ -474,13 +474,6 @@ class MSSFPlusModel(nn.Module):
             return drugs, sides, drug_avail, se_avail
 
         y_ds = self._sc_y_train[drug_idx, se_idx]
-        if not self.training:
-            # Evaluation invariant: val/test pairs are absent from Y_train -> y_ds must be 0
-            assert torch.all(y_ds == 0.0), (
-                "CRITICAL: Evaluation pair found with non-zero entry in Y_train during profile_self_correction!"
-            )
-            return drugs, sides, drug_avail, se_avail
-
         if not torch.any(y_ds > 0.0):
             return drugs, sides, drug_avail, se_avail
 

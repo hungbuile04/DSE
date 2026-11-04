@@ -222,23 +222,32 @@ Bảng giá trị đọc trực tiếp từ [`ARCHITECTURE_DUMP.md`](file:///Use
 
 ## 7. Kết quả Thực nghiệm Mốc Cơ sở (Benchmark Baseline Results)
 
-### 7.1. Hiệu quả Bù khuyết C1 trên Tập thuốc Cold-Start (`val_select` Split B Fold 0)
+### 7.1. Hiệu quả Bù khuyết C1 trên Tập thuốc Cold-Start (`val_select` Split B Fold 0, 67 thuốc cold-start)
 
-| Chiến lược bù khuyết | MSE (Càng thấp càng tốt) | Tương quan hạng Spearman | Độ trùng Top-10 Láng giềng |
+| Chiến lược bù khuyết (Cross-fit $K=5$) | MSE (`Avg(D9, D10)`) | Tương quan hạng Spearman | Độ trùng Top-10 Láng giềng |
 | :--- | :---: | :---: | :---: |
 | `mean` (Vector trung bình các thuốc `train`) | $0.010361$ | $0.6364$ | $7.46\%$ |
+| `regress_knn` (Trung bình hàng `D9, D10` của $k$ thuốc gần nhất theo view tĩnh) | $0.009782$ | $0.6482$ | $10.45\%$ |
 | `diffusion` (`ConditionalDenoiserMLP`, $K=5$ Cross-fitting) | $0.010614$ | $0.6693$ | $14.03\%$ |
-| **`regress` (`ProfileViewRegressor` $6759 \to 256 \to 256 \to 1500$, $K=5$ Cross-fitting)** | **$0.009274$** | **$0.6843$** | **$14.78\%$** (riêng D9: $16.57\%$) |
+| `regress` (`ProfileViewRegressor` MLP $6759 \to 256 \to 256 \to 1500$, $K=5$) | $0.009274$ | $0.6843$ | $14.78\%$ |
+| **`regress_ridge` (Ridge regression, $\alpha$ chọn nội bộ trên dữ liệu cross-fit $K=5$)** | **$0.008656$** | **$0.7054$** | **$22.16\%$** |
 
-### 7.2. So sánh Phân loại trên `val_select` (Xuất trực tiếp từ `summarize_results.py --eval_target valsel`)
+### 7.2. So sánh Phân loại trên `val_select` (Folds 0–2, xuất trực tiếp từ `summarize_results.py --eval_target valsel`)
 
 | Kịch bản | Mô hình | Số fold | Macro-F1 | Weighted-F1 | Accuracy | QWK | MAE |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Split B** *(Cold-start Thuốc mới)* | `MSSF_v2` (Gốc khử rò rỉ) | 3 | **0.3630 ± 0.0148** | 0.4668 ± 0.0140 | 0.4877 ± 0.0356 | 0.4428 ± 0.0248 | 0.6447 ± 0.0574 |
-| **Split B** *(Cold-start Thuốc mới)* | `C3_ce_unweighted` | 2 | **0.4117 ± 0.0153** | **0.5183 ± 0.0131** | **0.5350 ± 0.0052** | **0.4877 ± 0.0317** | **0.5688 ± 0.0015** |
-| **Split A** *(Warm-start)* | `C3_ce_unweighted` | 2 | **0.6572 ± 0.0010** | **0.6948 ± 0.0044** | **0.6969 ± 0.0046** | **0.7297 ± 0.0030** | **0.3554 ± 0.0042** |
+| **Split B** *(Cold-start Thuốc, `SelfCorr=1`)* | `MSSF_v2_selfcorr` | 3 | 0.3593 ± 0.0095 | 0.4757 ± 0.0088 | 0.5034 ± 0.0321 | 0.4110 ± 0.0054 | 0.6213 ± 0.0764 |
+| **Split B** *(Cold-start Thuốc, `SelfCorr=1`)* | `C3_ce_unweighted_selfcorr` | 3 | **0.4169 ± 0.0259** | **0.5166 ± 0.0191** | **0.5236 ± 0.0283** | **0.5007 ± 0.0439** | **0.5586 ± 0.0510** |
+| **Split B** *(Cold-start Thuốc, `SelfCorr=0`)* | `MSSF_v2` | 3 | 0.3599 ± 0.0318 | 0.4700 ± 0.0302 | 0.4880 ± 0.0327 | 0.4203 ± 0.0501 | 0.6349 ± 0.0641 |
+| **Split B** *(Cold-start Thuốc, `SelfCorr=0`)* | `C3_ce_unweighted` | 3 | **0.4266 ± 0.0275** | **0.5133 ± 0.0171** | **0.5162 ± 0.0222** | **0.5173 ± 0.0390** | **0.5742 ± 0.0329** |
+| **Split A** *(Warm-start Cặp, `SelfCorr=1`)* | `MSSF_v2_selfcorr` | 3 | 0.6421 ± 0.0054 | 0.6804 ± 0.0064 | 0.6818 ± 0.0079 | 0.7151 ± 0.0067 | 0.3768 ± 0.0173 |
+| **Split A** *(Warm-start Cặp, `SelfCorr=1`)* | `C3_ce_unweighted_selfcorr` | 3 | 0.6479 ± 0.0082 | 0.6817 ± 0.0082 | 0.6810 ± 0.0108 | 0.7293 ± 0.0092 | 0.3727 ± 0.0168 |
+| **Split A** *(Warm-start Cặp, `SelfCorr=0`)* | `MSSF_v2` | 3 | 0.6506 ± 0.0140 | 0.6917 ± 0.0067 | 0.6939 ± 0.0044 | 0.7228 ± 0.0080 | 0.3556 ± 0.0028 |
+| **Split A** *(Warm-start Cặp, `SelfCorr=0`)* | `C3_ce_unweighted` | 3 | 0.6454 ± 0.0099 | 0.6809 ± 0.0059 | 0.6835 ± 0.0109 | 0.7229 ± 0.0020 | 0.3620 ± 0.0076 |
 
-- **Mức cải thiện cốt lõi**: Trên tập thuốc hoàn toàn mới (Split B), mô hình cải tiến tăng **+0.0487 Macro-F1** (tăng tương đối **+13.4%** so với 3 fold, hoặc **+0.0592 Macro-F1** khi so cùng cặp Fold 0–1), tăng **+4.73% Accuracy**, và giảm sai số cấp bậc MAE từ **0.6447** xuống **0.5688**.
+- **Nhận xét cốt lõi**:
+  - **Trên Split B (Cold-start Drug)**: `MSSF_plus` (`C3_ce_unweighted`) vượt `MSSF_v2` **`+0.0576 Macro-F1`** ở thiết lập bảng chính (`profile_self_correction = 1`: `0.4169` vs `0.3593`) và **`+0.0667 Macro-F1`** ở thiết lập gốc (`profile_self_correction = 0`: `0.4266` vs `0.3599`).
+  - **Trên Split A (Warm-start Pair)**: **`MSSF_plus` không tốt hơn `MSSF_v2`** (`0.6479` vs `0.6421` khi `SelfCorr=1`; `0.6454` vs `0.6506` khi `SelfCorr=0` — hai mô hình tương đương nhau trong phạm vi nhiễu giữa các lần chạy).
 
 ---
 

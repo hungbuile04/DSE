@@ -81,6 +81,134 @@ def eval_regression_predictions(
     return out
 
 
+def fit_ordinal_thresholds_on_valsel(
+    y_true_freq_1_to_5: np.ndarray,
+    y_pred_float: np.ndarray,
+) -> np.ndarray:
+    """
+    Select 4 strictly monotonic thresholds `t1 < t2 < t3 < t4` on `val_select` to maximize
+    5-class `MacroF1` when discretizing continuous predictions via `np.digitize(pred, [t1, t2, t3, t4])`.
+    Always includes the standard rounding thresholds `[1.5, 2.5, 3.5, 4.5]` in the candidate pool.
+    """
+    yt = np.clip(np.round(np.asarray(y_true_freq_1_to_5, dtype=np.float64).flatten()), 1, 5).astype(np.int64) - 1
+    yp = np.asarray(y_pred_float, dtype=np.float64).flatten()
+    n = len(yt)
+    default_thr = np.array([1.5, 2.5, 3.5, 4.5], dtype=np.float64)
+    if n < 10 or np.std(yp) < 1e-12:
+        return default_thr
+
+    order = np.argsort(yp, kind='mergesort')
+    yp_s = yp[order]
+    yt_s = yt[order]
+
+    # Only allow cuts where yp_s[idx - 1] < yp_s[idx] so thresholds are strictly well-defined
+    valid_cuts = np.where(yp_s[1:] > yp_s[:-1] + 1e-12)[0] + 1
+    if len(valid_cuts) < 4:
+        return default_thr
+
+    pref = np.zeros((n + 1, 5), dtype=np.int32)
+    for c in range(5):
+        pref[1:, c] = np.cumsum(yt_s == c, dtype=np.int32)
+    tot_true = pref[n, :].astype(np.float64)
+
+    def _macro_f1_for_cuts(i1: int, i2: int, i3: int, i4: int) -> float:
+        cuts = (0, i1, i2, i3, i4, n)
+        f1_sum = 0.0
+        for c in range(5):
+            tp = float(pref[cuts[c + 1], c] - pref[cuts[c], c])
+            p_cnt = float(cuts[c + 1] - cuts[c])
+            denom = p_cnt + tot_true[c]
+            if denom > 0.0:
+                f1_sum += (2.0 * tp) / denom
+        return f1_sum / 5.0
+
+    # Candidate cuts: quantiles + empirical class proportions + default [1.5, 2.5, 3.5, 4.5]
+    q_idx = np.linspace(0, len(valid_cuts) - 1, min(55, len(valid_cuts))).round().astype(int)
+    cand_set = set(valid_cuts[q_idx].tolist())
+    for t_def in default_thr:
+        pos = int(np.searchsorted(yp_s, t_def, side='right'))
+        nearest = valid_cuts[np.argmin(np.abs(valid_cuts - pos))]
+        cand_set.add(int(nearest))
+    cand = np.array(sorted(cand_set), dtype=np.int32)
+
+    m = len(cand)
+    best_cuts = None
+    best_score = -1.0
+    if m >= 4:
+        from itertools import combinations
+        combos = np.array(list(combinations(cand, 4)), dtype=np.int32)
+        c1, c2, c3, c4 = combos[:, 0], combos[:, 1], combos[:, 2], combos[:, 3]
+        tp0 = (pref[c1, 0]).astype(np.float64)
+        tp1 = (pref[c2, 1] - pref[c1, 1]).astype(np.float64)
+        tp2 = (pref[c3, 2] - pref[c2, 2]).astype(np.float64)
+        tp3 = (pref[c4, 3] - pref[c3, 3]).astype(np.float64)
+        tp4 = (pref[n, 4] - pref[c4, 4]).astype(np.float64)
+
+        p0 = c1.astype(np.float64)
+        p1 = (c2 - c1).astype(np.float64)
+        p2 = (c3 - c2).astype(np.float64)
+        p3 = (c4 - c3).astype(np.float64)
+        p4 = (n - c4).astype(np.float64)
+
+        f0 = np.where(p0 + tot_true[0] > 0, 2.0 * tp0 / np.maximum(p0 + tot_true[0], 1.0), 0.0)
+        f1 = np.where(p1 + tot_true[1] > 0, 2.0 * tp1 / np.maximum(p1 + tot_true[1], 1.0), 0.0)
+        f2 = np.where(p2 + tot_true[2] > 0, 2.0 * tp2 / np.maximum(p2 + tot_true[2], 1.0), 0.0)
+        f3 = np.where(p3 + tot_true[3] > 0, 2.0 * tp3 / np.maximum(p3 + tot_true[3], 1.0), 0.0)
+        f4 = np.where(p4 + tot_true[4] > 0, 2.0 * tp4 / np.maximum(p4 + tot_true[4], 1.0), 0.0)
+        scores = (f0 + f1 + f2 + f3 + f4) / 5.0
+        best_idx = int(np.argmax(scores))
+        best_score = float(scores[best_idx])
+        best_cuts = [int(x) for x in combos[best_idx]]
+
+        # Coordinate polish over all valid_cuts
+        for _ in range(3):
+            improved = False
+            for k_pos in range(4):
+                lo = 0 if k_pos == 0 else best_cuts[k_pos - 1]
+                hi = n if k_pos == 3 else best_cuts[k_pos + 1]
+                sub_valid = valid_cuts[(valid_cuts > lo) & (valid_cuts < hi)]
+                for cand_i in sub_valid:
+                    trial = list(best_cuts)
+                    trial[k_pos] = int(cand_i)
+                    sc = _macro_f1_for_cuts(trial[0], trial[1], trial[2], trial[3])
+                    if sc > best_score + 1e-12:
+                        best_score = sc
+                        best_cuts = trial
+                        improved = True
+            if not improved:
+                break
+
+    if best_cuts is None:
+        return default_thr
+
+    thr = np.array(
+        [0.5 * (yp_s[i - 1] + yp_s[i]) for i in best_cuts],
+        dtype=np.float64,
+    )
+    # Verify monotonic and compare against default [1.5, 2.5, 3.5, 4.5]
+    pred_def = np.clip(np.round(yp), 1, 5).astype(np.int64) - 1
+    f1_def = float(compute_multiclass_metrics(yt, pred_def, probs=None)['MacroF1'])
+    pred_thr = np.digitize(yp, thr).astype(np.int64)
+    f1_thr = float(compute_multiclass_metrics(yt, pred_thr, probs=None)['MacroF1'])
+    if f1_thr < f1_def or not np.all(np.diff(thr) > 0):
+        return default_thr
+    return thr
+
+
+def apply_ordinal_thresholds_to_freq(
+    y_pred_float: np.ndarray,
+    thresholds: np.ndarray,
+) -> np.ndarray:
+    """
+    Map continuous predictions to discrete ordinal frequencies `{1.0, 2.0, 3.0, 4.0, 5.0}`
+    using `thresholds = [t1, t2, t3, t4]` selected on `val_select`.
+    """
+    yp = np.asarray(y_pred_float, dtype=np.float64).flatten()
+    thr = np.asarray(thresholds, dtype=np.float64).flatten()
+    assert len(thr) == 4 and np.all(np.diff(thr) > 0), f"Thresholds must be strictly increasing: {thr}"
+    return (np.digitize(yp, thr) + 1).astype(np.float32)
+
+
 def sample_negative_pairs_v2(
     drug_side_train: np.ndarray,
     fold_split: FoldSplit,
@@ -233,6 +361,10 @@ def save_baseline_fold_outputs(
     primary_dir = os.path.join(results_dir, primary_folder)
     os.makedirs(primary_dir, exist_ok=True)
 
+    thr_folder = f'{method_name}_thr_{split_type}'
+    thr_dir = os.path.join(results_dir, thr_folder)
+    thr_summary = None
+
     if valsel_split is not None and valsel_preds_float is not None:
         vs_labels = np.asarray(valsel_split[:, 2], dtype=np.float64).flatten()
         vs_preds = np.asarray(valsel_preds_float, dtype=np.float32).flatten()
@@ -241,6 +373,25 @@ def save_baseline_fold_outputs(
         )
         np.save(os.path.join(primary_dir, f'fold_{fold}_valsel_labels.npy'), vs_labels)
         np.save(os.path.join(primary_dir, f'fold_{fold}_valsel_preds.npy'), vs_preds)
+
+        # Fit 4 monotonic thresholds t1 < t2 < t3 < t4 on val_select and apply unchanged to val_select & test
+        thr = fit_ordinal_thresholds_on_valsel(vs_labels, vs_preds)
+        vs_preds_thr = apply_ordinal_thresholds_to_freq(vs_preds, thr)
+        valsel_thr_metrics = eval_regression_predictions(vs_labels, vs_preds_thr)
+        fold_summary['valsel_thresholds'] = [float(x) for x in thr]
+        fold_summary['valsel_thr_metrics'] = valsel_thr_metrics
+
+        os.makedirs(thr_dir, exist_ok=True)
+        np.save(os.path.join(thr_dir, f'fold_{fold}_valsel_labels.npy'), vs_labels)
+        np.save(os.path.join(thr_dir, f'fold_{fold}_valsel_preds.npy'), vs_preds_thr)
+
+        thr_summary = dict(fold_summary)
+        thr_summary['method_name'] = f'{method_name}_thr'
+        thr_summary['valsel_metrics'] = valsel_thr_metrics
+        if 'best_train_macro_f1' in fold_summary:
+            thr_summary['train_valsel_macro_f1_gap'] = float(
+                float(fold_summary['best_train_macro_f1']) - float(valsel_thr_metrics['MacroF1'])
+            )
 
     if eval_test and test_preds_float is not None:
         expected_labels = np.asarray(test_split[:, 2], dtype=np.float64).flatten()
@@ -253,9 +404,23 @@ def save_baseline_fold_outputs(
         np.save(os.path.join(primary_dir, f'fold_{fold}_labels.npy'), expected_labels)
         np.save(os.path.join(primary_dir, f'fold_{fold}_preds.npy'), preds_primary)
 
+        if thr_summary is not None and 'valsel_thresholds' in fold_summary:
+            thr_arr = np.asarray(fold_summary['valsel_thresholds'], dtype=np.float64)
+            preds_test_thr = apply_ordinal_thresholds_to_freq(preds_primary, thr_arr)
+            np.save(os.path.join(thr_dir, f'fold_{fold}_labels.npy'), expected_labels)
+            np.save(os.path.join(thr_dir, f'fold_{fold}_preds.npy'), preds_test_thr)
+            test_thr_metrics = eval_regression_predictions(expected_labels, preds_test_thr)
+            fold_summary['test_thr_metrics'] = test_thr_metrics
+            thr_summary['test_metrics'] = test_thr_metrics
+
     with open(os.path.join(primary_dir, f'fold_{fold}_summary.json'), 'w', encoding='utf-8') as f:
         json.dump(fold_summary, f, indent=2)
     sync_dir_to_drive(primary_dir, drive_dir, primary_folder)
+
+    if thr_summary is not None:
+        with open(os.path.join(thr_dir, f'fold_{fold}_summary.json'), 'w', encoding='utf-8') as f:
+            json.dump(thr_summary, f, indent=2)
+        sync_dir_to_drive(thr_dir, drive_dir, thr_folder)
 
     if rmse_sel_preds_float is not None or rmse_sel_valsel_preds_float is not None:
         rmse_folder = f'{method_name}_rmseSel_{split_type}'
@@ -314,6 +479,34 @@ def finalize_baseline_experiment(
         'fold_summaries': fold_summaries,
     }
 
+    if all(s.get('valsel_thr_metrics') is not None for s in fold_summaries):
+        thr_vm, thr_vs = aggregate_fold_metrics([s['valsel_thr_metrics'] for s in fold_summaries])
+        exp_summary['valsel_thr_summary'] = {'mean': thr_vm, 'std': thr_vs}
+        thr_test_summary = None
+        if all(s.get('test_thr_metrics') is not None for s in fold_summaries):
+            thr_tm, thr_ts = aggregate_fold_metrics([s['test_thr_metrics'] for s in fold_summaries])
+            thr_test_summary = {'mean': thr_tm, 'std': thr_ts}
+            exp_summary['test_thr_summary'] = thr_test_summary
+
+        thr_folder = f'{method_name}_thr_{split_type}'
+        thr_dir = os.path.join(results_dir, thr_folder)
+        os.makedirs(thr_dir, exist_ok=True)
+        thr_cfg = dict(cfg, discretization='val_select_monotonic_thresholds')
+        thr_exp_summary = {
+            'method_name': f'{method_name}_thr',
+            'split_type': split_type,
+            'mode': mode,
+            'folds': folds,
+            'config': thr_cfg,
+            'valsel_summary': {'mean': thr_vm, 'std': thr_vs},
+            'test_summary': thr_test_summary,
+            'fold_summaries': fold_summaries,
+        }
+        save_experiment_config(method_dir=thr_dir, config=thr_cfg, summary=thr_exp_summary)
+        with open(os.path.join(thr_dir, f'summary_{mode}.json'), 'w', encoding='utf-8') as f:
+            json.dump(thr_exp_summary, f, indent=2)
+        sync_dir_to_drive(thr_dir, drive_dir, thr_folder)
+
     if has_rmse_sel:
         if all(s.get('rmse_sel_valsel_metrics') is not None for s in fold_summaries):
             rm_vm, rm_vs = aggregate_fold_metrics([s['rmse_sel_valsel_metrics'] for s in fold_summaries])
@@ -352,4 +545,15 @@ def finalize_baseline_experiment(
             f"  RMSE       : {rep_m['RMSE']:.4f} +/- {rep_s['RMSE']:.4f}\n"
             f"  Saved to   : {summary_path}"
         )
+        if 'valsel_thr_summary' in exp_summary:
+            tm_d = exp_summary.get('test_thr_summary') or exp_summary['valsel_thr_summary']
+            tm_m, tm_s = tm_d['mean'], tm_d['std']
+            print(
+                f"=== Summary {method_name}_thr (Split {split_type}, {len(folds)} folds, {rep_tag}, 4-threshold calibrated) ===\n"
+                f"  MacroF1    : {tm_m['MacroF1']:.4f} +/- {tm_s['MacroF1']:.4f}\n"
+                f"  WeightedF1 : {tm_m['WeightedF1']:.4f} +/- {tm_s['WeightedF1']:.4f}\n"
+                f"  Accuracy   : {tm_m['Accuracy']:.4f} +/- {tm_s['Accuracy']:.4f}\n"
+                f"  QWK        : {tm_m['QWK']:.4f} +/- {tm_s['QWK']:.4f}\n"
+                f"  MAE        : {tm_m['MAE']:.4f} +/- {tm_s['MAE']:.4f}"
+            )
     return exp_summary

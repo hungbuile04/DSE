@@ -53,8 +53,138 @@ if MGPRED_DIR not in sys.path:
     sys.path.insert(0, MGPRED_DIR)
 
 from Ten_Fold_test import MGPred  # noqa: E402
-from utils.aggregator import aggregator  # noqa: E402
+from utils.aggregator import aggregator, a_res  # noqa: E402
 from utils.encoder import encoder  # noqa: E402
+
+
+class _SelfCorrectingAggregator(aggregator):
+    """
+    Extension of `MGPred`'s `aggregator` supporting `profile_self_correction`:
+      - When `profile_self_correction=True` and a batch sample `(d = nodes_u[b], s = nodes_i[b])`
+        belongs to `Y_train` (`y_train_mat[d, s] > 0`):
+        1. Target edge `(d, s)` is removed from `u_adj[d]` (for drug aggregators) and `(s, d)`
+           is removed from `i_adj[s]` (for SE aggregators).
+        2. If `is_interaction_view=True` (`u_agg1` / `i_agg1`, where initial features are
+           rows of `Y_train` and `Y_train.T`), position `s` in drug `d`'s initial feature vector
+           `u2e1[d, :]` (and position `d` in SE `s`'s initial feature vector `i2e1[s, :]`)
+           is set to `0.0`.
+      - For `val_select`, `val_calib`, and `test` pairs (`y_train_mat[d, s] == 0`), features and
+        adjacency lists are 100% unchanged.
+    """
+
+    def __init__(
+        self,
+        drug_feature: nn.Embedding,
+        side_feature: nn.Embedding,
+        adj: Dict[int, list],
+        embed_dim: int,
+        weight_decay: float = 0.0005,
+        droprate: float = 0.5,
+        cuda="cpu",
+        is_drug_part: bool = True,
+        profile_self_correction: bool = False,
+        is_interaction_view: bool = False,
+        y_train_mat: Optional[np.ndarray] = None,
+    ):
+        super().__init__(
+            drug_feature, side_feature, adj, embed_dim,
+            weight_decay=weight_decay, droprate=droprate, cuda=cuda, is_drug_part=is_drug_part,
+        )
+        self.profile_self_correction = bool(profile_self_correction)
+        self.is_interaction_view = bool(is_interaction_view)
+        self.y_train_mat = y_train_mat
+
+    def forward_pair_aware(
+        self,
+        nodes_u: torch.Tensor,
+        nodes_i: torch.Tensor,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        bsz = int(nodes_u.shape[0])
+        u_np = nodes_u.detach().cpu().numpy().astype(int)
+        i_np = nodes_i.detach().cpu().numpy().astype(int)
+        threshold = 24
+
+        if self.profile_self_correction and self.y_train_mat is not None:
+            is_train_pair = (self.y_train_mat[u_np, i_np] > 0.0)
+        else:
+            is_train_pair = np.zeros(bsz, dtype=bool)
+
+        if self.is_drug:
+            u_raw = self.drugfeature.weight[nodes_u]
+            if self.is_interaction_view and np.any(is_train_pair):
+                u_raw = u_raw.clone()
+                b_pos = torch.as_tensor(np.where(is_train_pair)[0], dtype=torch.long, device=self.device)
+                u_raw[b_pos, nodes_i[b_pos]] = 0.0
+            nodes_fea = self.u_layer(u_raw).to(self.device)
+        else:
+            i_raw = self.sidefeature.weight[nodes_i]
+            if self.is_interaction_view and np.any(is_train_pair):
+                i_raw = i_raw.clone()
+                b_pos = torch.as_tensor(np.where(is_train_pair)[0], dtype=torch.long, device=self.device)
+                i_raw[b_pos, nodes_u[b_pos]] = 0.0
+            nodes_fea = self.i_layer(i_raw).to(self.device)
+
+        neigh_embed = torch.empty((bsz, self.embed_dim), dtype=torch.float32, device=self.device)
+
+        for b in range(bsz):
+            u_id = int(u_np[b])
+            i_id = int(i_np[b])
+            sc_active = bool(is_train_pair[b])
+
+            if self.is_drug:
+                raw_single = self.drugfeature.weight[nodes_u[b:b + 1]]
+                if self.is_interaction_view and sc_active:
+                    raw_single = raw_single.clone()
+                    raw_single[0, i_id] = 0.0
+                node_feature = self.u_layer(raw_single).to(self.device)
+                interactions = self.adj.get(u_id, [])
+                if sc_active and interactions:
+                    interactions = [item for item in interactions if item[0] != i_id]
+            else:
+                raw_single = self.sidefeature.weight[nodes_i[b:b + 1]]
+                if self.is_interaction_view and sc_active:
+                    raw_single = raw_single.clone()
+                    raw_single[0, u_id] = 0.0
+                node_feature = self.i_layer(raw_single).to(self.device)
+                interactions = self.adj.get(i_id, [])
+                if sc_active and interactions:
+                    interactions = [item for item in interactions if item[0] != u_id]
+
+            n = len(interactions)
+            if n == 0:
+                neigh_embed[b] = node_feature[0]
+                continue
+
+            if n < threshold:
+                sel_ids = [item[0] for item in interactions]
+                times = n
+            else:
+                sel_ids = a_res(interactions, threshold)
+                times = threshold
+
+            sel_t = torch.as_tensor(sel_ids, dtype=torch.long, device=self.device)
+            if self.is_drug:
+                neighs_feature = self.i_layer(self.sidefeature.weight[sel_t]).to(self.device)
+            else:
+                neighs_feature = self.u_layer(self.drugfeature.weight[sel_t]).to(self.device)
+
+            att_w = self.att(neighs_feature, node_feature, times)
+            embedding = torch.mm(neighs_feature.t(), att_w)
+            neigh_embed[b] = embedding.t()[0]
+
+        return nodes_fea, neigh_embed
+
+
+class _SelfCorrectingEncoder(encoder):
+    def __init__(self, embedding_dim: int, agg: _SelfCorrectingAggregator, cuda="cpu", is_user_part: bool = True):
+        super().__init__(embedding_dim, agg, cuda=cuda, is_user_part=is_user_part)
+
+    def forward(self, nodes_u: torch.Tensor, nodes_i: torch.Tensor) -> torch.Tensor:
+        if getattr(self.aggregator, 'profile_self_correction', False):
+            nodes_fea, neigh_embed = self.aggregator.forward_pair_aware(nodes_u, nodes_i)
+            combined = torch.cat((nodes_fea, neigh_embed), dim=1)
+            return self.layer(combined).to(self.device)
+        return super().forward(nodes_u, nodes_i)
 
 
 def _load_mgpred_static_features() -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -107,6 +237,7 @@ def _build_mgpred_model_for_fold(
     """Construct leak-free `MGPred` instance using only `train_pairs` for `ufea1/ifea1` and `adj`."""
     drug_stitch5, drug_w2v, se_semantic, se_glove = static_feats
     drug_side_train = make_train_only_freq(train_pairs).astype(np.float32)
+    self_corr = bool(cfg.get('profile_self_correction', False))
 
     u_adj: Dict[int, list] = {}
     i_adj: Dict[int, list] = {}
@@ -129,19 +260,43 @@ def _build_mgpred_model_for_fold(
     wd = float(cfg['weight_decay'])
     drop = float(cfg['droprate'])
 
-    u_agg1 = aggregator(u2e1, i2e1, u_adj, embed_dim, cuda=device, weight_decay=wd, droprate=drop)
-    u_enc1 = encoder(embed_dim, u_agg1, cuda=device)
-    u_agg2 = aggregator(u2e2, i2e2, u_adj, embed_dim, cuda=device, weight_decay=wd, droprate=drop)
-    u_enc2 = encoder(embed_dim, u_agg2, cuda=device)
-    u_agg3 = aggregator(u2e3, i2e3, u_adj, embed_dim, cuda=device, weight_decay=wd, droprate=drop)
-    u_enc3 = encoder(embed_dim, u_agg3, cuda=device)
+    u_agg1 = _SelfCorrectingAggregator(
+        u2e1, i2e1, u_adj, embed_dim, cuda=device, weight_decay=wd, droprate=drop,
+        is_drug_part=True, profile_self_correction=self_corr, is_interaction_view=True,
+        y_train_mat=drug_side_train,
+    )
+    u_enc1 = _SelfCorrectingEncoder(embed_dim, u_agg1, cuda=device, is_user_part=True)
+    u_agg2 = _SelfCorrectingAggregator(
+        u2e2, i2e2, u_adj, embed_dim, cuda=device, weight_decay=wd, droprate=drop,
+        is_drug_part=True, profile_self_correction=self_corr, is_interaction_view=False,
+        y_train_mat=drug_side_train,
+    )
+    u_enc2 = _SelfCorrectingEncoder(embed_dim, u_agg2, cuda=device, is_user_part=True)
+    u_agg3 = _SelfCorrectingAggregator(
+        u2e3, i2e3, u_adj, embed_dim, cuda=device, weight_decay=wd, droprate=drop,
+        is_drug_part=True, profile_self_correction=self_corr, is_interaction_view=False,
+        y_train_mat=drug_side_train,
+    )
+    u_enc3 = _SelfCorrectingEncoder(embed_dim, u_agg3, cuda=device, is_user_part=True)
 
-    i_agg1 = aggregator(u2e1, i2e1, i_adj, embed_dim, cuda=device, weight_decay=wd, droprate=drop, is_drug_part=False)
-    i_enc1 = encoder(embed_dim, i_agg1, cuda=device, is_user_part=False)
-    i_agg2 = aggregator(u2e2, i2e2, i_adj, embed_dim, cuda=device, weight_decay=wd, droprate=drop, is_drug_part=False)
-    i_enc2 = encoder(embed_dim, i_agg2, cuda=device, is_user_part=False)
-    i_agg3 = aggregator(u2e3, i2e3, i_adj, embed_dim, cuda=device, weight_decay=wd, droprate=drop, is_drug_part=False)
-    i_enc3 = encoder(embed_dim, i_agg3, cuda=device, is_user_part=False)
+    i_agg1 = _SelfCorrectingAggregator(
+        u2e1, i2e1, i_adj, embed_dim, cuda=device, weight_decay=wd, droprate=drop,
+        is_drug_part=False, profile_self_correction=self_corr, is_interaction_view=True,
+        y_train_mat=drug_side_train,
+    )
+    i_enc1 = _SelfCorrectingEncoder(embed_dim, i_agg1, cuda=device, is_user_part=False)
+    i_agg2 = _SelfCorrectingAggregator(
+        u2e2, i2e2, i_adj, embed_dim, cuda=device, weight_decay=wd, droprate=drop,
+        is_drug_part=False, profile_self_correction=self_corr, is_interaction_view=False,
+        y_train_mat=drug_side_train,
+    )
+    i_enc2 = _SelfCorrectingEncoder(embed_dim, i_agg2, cuda=device, is_user_part=False)
+    i_agg3 = _SelfCorrectingAggregator(
+        u2e3, i2e3, i_adj, embed_dim, cuda=device, weight_decay=wd, droprate=drop,
+        is_drug_part=False, profile_self_correction=self_corr, is_interaction_view=False,
+        y_train_mat=drug_side_train,
+    )
+    i_enc3 = _SelfCorrectingEncoder(embed_dim, i_agg3, cuda=device, is_user_part=False)
 
     model = MGPred(
         u_enc1, u_enc2, u_enc3,
@@ -218,6 +373,9 @@ def run_mgpred_fold(
     t0 = time.time()
     set_global_seed(int(cfg['seed']) + int(fold))
     fold_split = load_fold_data(fold, split_type)
+    self_corr = bool(cfg.get('profile_self_correction', False))
+    method_name = 'MGPred_selfcorr' if self_corr else 'MGPred'
+    eval_test = bool(cfg.get('eval_test', False))
 
     model = _build_mgpred_model_for_fold(fold_split.train, static_feats, cfg, device)
     optimizer = torch.optim.Adam(model.parameters(), lr=float(cfg['lr']))
@@ -228,6 +386,7 @@ def run_mgpred_fold(
     eval_every = max(1, int(cfg['eval_every']))
 
     train_loader = _make_pair_loader(fold_split.train, batch_size=batch_size, shuffle=True)
+    train_eval_loader = _make_pair_loader(fold_split.train, batch_size=eval_bs, shuffle=False)
     valsel_loader = _make_pair_loader(fold_split.valsel, batch_size=eval_bs, shuffle=False)
     test_loader = _make_pair_loader(fold_split.test, batch_size=eval_bs, shuffle=False)
 
@@ -238,6 +397,7 @@ def run_mgpred_fold(
     best_rmse = float('inf')
     best_rmse_epoch = 1
     best_rmse_state = copy.deepcopy(model.state_dict())
+    epoch_valsel_curve = []
 
     for epoch in range(1, epochs + 1):
         model.train()
@@ -261,6 +421,7 @@ def run_mgpred_fold(
         if epoch == 1 or epoch % eval_every == 0 or epoch == epochs:
             val_y, val_p, ema_state = _predict_mgpred(model, valsel_loader, device, use_ema=True)
             val_metrics = eval_regression_predictions(val_y, val_p)
+            epoch_valsel_curve.append(float(val_metrics['MacroF1']))
 
             if val_metrics['MacroF1'] > best_f1:
                 best_f1 = val_metrics['MacroF1']
@@ -274,7 +435,7 @@ def run_mgpred_fold(
 
             if verbose and (epoch == 1 or epoch % max(eval_every, 5) == 0 or epoch == epochs):
                 print(
-                    f"  [MGPred Split {split_type} Fold {fold}] Ep {epoch:02d}/{epochs:02d} | "
+                    f"  [{method_name} Split {split_type} Fold {fold}] Ep {epoch:02d}/{epochs:02d} | "
                     f"Loss={running_loss / max(1, n_batches):.4f} | "
                     f"valsel MacroF1={val_metrics['MacroF1']:.4f} (best={best_f1:.4f}@{best_f1_epoch}) | "
                     f"RMSE={val_metrics['RMSE']:.4f} (best={best_rmse:.4f}@{best_rmse_epoch})"
@@ -282,35 +443,56 @@ def run_mgpred_fold(
 
     # 1. Primary evaluation (MacroF1-selected checkpoint)
     model.load_state_dict(best_f1_state)
-    val_y, val_p_f1, _ = _predict_mgpred(model, valsel_loader, device, use_ema=False)
-    test_y, test_p_f1, _ = _predict_mgpred(model, test_loader, device, use_ema=False)
-    assert np.array_equal(np.round(test_y), np.round(fold_split.test[:, 2]))
+    tr_y_eval, tr_p_eval, _ = _predict_mgpred(model, train_eval_loader, device, use_ema=False)
+    train_eval_final = eval_regression_predictions(tr_y_eval, tr_p_eval)
+    best_train_macro_f1 = float(train_eval_final['MacroF1'])
 
+    val_y, val_p_f1, _ = _predict_mgpred(model, valsel_loader, device, use_ema=False)
     valsel_final = eval_regression_predictions(val_y, val_p_f1)
-    test_metrics_f1 = eval_regression_predictions(test_y, test_p_f1)
+
+    if eval_test:
+        test_y, test_p_f1, _ = _predict_mgpred(model, test_loader, device, use_ema=False)
+        assert np.array_equal(np.round(test_y), np.round(fold_split.test[:, 2]))
+        test_metrics_f1 = eval_regression_predictions(test_y, test_p_f1)
+    else:
+        test_p_f1 = None
+        test_metrics_f1 = None
 
     # 2. Secondary appendix evaluation (RMSE-selected checkpoint)
     model.load_state_dict(best_rmse_state)
-    _, test_p_rmse, _ = _predict_mgpred(model, test_loader, device, use_ema=False)
-    test_metrics_rmse = eval_regression_predictions(test_y, test_p_rmse)
+    _, val_p_rmse, _ = _predict_mgpred(model, valsel_loader, device, use_ema=False)
+    valsel_rmse_final = eval_regression_predictions(val_y, val_p_rmse)
+    if eval_test:
+        _, test_p_rmse, _ = _predict_mgpred(model, test_loader, device, use_ema=False)
+        test_metrics_rmse = eval_regression_predictions(test_y, test_p_rmse)
+    else:
+        test_p_rmse = None
+        test_metrics_rmse = None
 
     elapsed = time.time() - t0
+    train_valsel_gap = float(best_train_macro_f1 - float(valsel_final['MacroF1']))
     fold_summary = {
-        'method_name': 'MGPred',
+        'method_name': method_name,
         'split_type': split_type,
         'fold': int(fold),
+        'profile_self_correction': bool(self_corr),
         'best_epoch': int(best_f1_epoch),
         'best_valsel_MacroF1': float(best_f1),
+        'best_train_macro_f1': float(best_train_macro_f1),
+        'train_eval_mode': True,
+        'train_valsel_macro_f1_gap': float(train_valsel_gap),
+        'epoch_valsel_macro_f1_curve': epoch_valsel_curve,
         'best_rmse_epoch': int(best_rmse_epoch),
         'best_valsel_RMSE': float(best_rmse),
         'valsel_metrics': valsel_final,
+        'rmse_sel_valsel_metrics': valsel_rmse_final,
         'test_metrics': test_metrics_f1,
         'rmse_sel_test_metrics': test_metrics_rmse,
         'elapsed_seconds': float(elapsed),
     }
 
     save_baseline_fold_outputs(
-        method_name='MGPred',
+        method_name=method_name,
         split_type=split_type,
         fold=fold,
         test_split=fold_split.test,
@@ -319,13 +501,19 @@ def run_mgpred_fold(
         results_dir=results_dir,
         drive_dir=drive_dir,
         rmse_sel_preds_float=test_p_rmse,
+        valsel_split=fold_split.valsel,
+        valsel_preds_float=val_p_f1,
+        rmse_sel_valsel_preds_float=val_p_rmse,
+        eval_test=eval_test,
     )
 
     if verbose:
+        rep_m = test_metrics_f1 if test_metrics_f1 is not None else valsel_final
+        rep_tag = "Test" if test_metrics_f1 is not None else "valsel"
         print(
-            f"  --> MGPred Fold {fold} Done ({elapsed:.1f}s) | "
-            f"Test MacroF1={test_metrics_f1['MacroF1']:.4f}, QWK={test_metrics_f1['QWK']:.4f}, "
-            f"RMSE={test_metrics_f1['RMSE']:.4f}, RegMAE={test_metrics_f1['RegMAE']:.4f}"
+            f"  --> {method_name} Fold {fold} Done ({elapsed:.1f}s) | Best Ep={best_f1_epoch} | "
+            f"{rep_tag} MacroF1={rep_m['MacroF1']:.4f}, QWK={rep_m['QWK']:.4f}, "
+            f"MAE={rep_m['MAE']:.4f}, RMSE={rep_m['RMSE']:.4f} | Gap(tr-val)={train_valsel_gap:+.4f}"
         )
     return fold_summary
 
@@ -353,6 +541,8 @@ def run_mgpred_experiment(
         'N': 30000,
         'beta_ema': 0.999,
         'selection_metric': 'MacroF1',
+        'profile_self_correction': False,
+        'eval_test': False,
         'device': None,
     }
     if overrides:
@@ -360,28 +550,32 @@ def run_mgpred_experiment(
             if v is not None:
                 cfg[k] = v
 
+    self_corr = bool(cfg.get('profile_self_correction', False))
+    method_name = 'MGPred_selfcorr' if self_corr else 'MGPred'
+    eval_test = bool(cfg.get('eval_test', False))
     folds = get_fold_list(mode=mode, custom_folds=custom_folds)
     device = get_device(cfg.get('device'))
     static_feats = _load_mgpred_static_features()
 
     if verbose:
         print(
-            f"=== Running MGPred | Split {split_type} | Mode={mode} (folds={folds}) | "
-            f"Device={device} | Epochs={cfg['epochs']} | Resume={resume} ==="
+            f"=== Running {method_name} | Split {split_type} | Mode={mode} (folds={folds}) | "
+            f"Device={device} | Epochs={cfg['epochs']} | SelfCorr={self_corr} | Resume={resume} ==="
         )
 
     fold_summaries = []
     for fold in folds:
         if resume:
             cached = try_restore_baseline_fold(
-                'MGPred', split_type, fold, results_dir, drive_dir=drive_dir, has_rmse_sel=True
+                method_name, split_type, fold, results_dir,
+                drive_dir=drive_dir, has_rmse_sel=True, eval_test=eval_test,
             )
             if cached is not None:
                 if verbose:
-                    tm = cached['test_metrics']
+                    vm = cached['valsel_metrics']
                     print(
-                        f"  [RESUME] Skipping MGPred_{split_type} Fold {fold} "
-                        f"(MacroF1={tm['MacroF1']:.4f}, RMSE={tm['RMSE']:.4f})"
+                        f"  [RESUME] Skipping {method_name}_{split_type} Fold {fold} "
+                        f"(valsel MacroF1={vm['MacroF1']:.4f}, RMSE={vm['RMSE']:.4f})"
                     )
                 fold_summaries.append(cached)
                 continue
@@ -399,7 +593,7 @@ def run_mgpred_experiment(
         fold_summaries.append(s)
 
     return finalize_baseline_experiment(
-        method_name='MGPred',
+        method_name=method_name,
         split_type=split_type,
         mode=mode,
         folds=folds,
@@ -421,6 +615,8 @@ def main():
     parser.add_argument('--eval_every', type=int, default=None)
     parser.add_argument('--batch_size', type=int, default=None)
     parser.add_argument('--lr', type=float, default=None)
+    parser.add_argument('--profile_self_correction', type=int, choices=[0, 1], default=None)
+    parser.add_argument('--eval_test', action='store_true')
     parser.add_argument('--device', type=str, default=None)
     parser.add_argument('--results_dir', type=str, default=DEFAULT_RESULTS_V2_DIR)
     parser.add_argument('--drive_dir', type=str, default=None)
@@ -439,6 +635,10 @@ def main():
             'eval_every': args.eval_every,
             'batch_size': args.batch_size,
             'lr': args.lr,
+            'profile_self_correction': (
+                bool(args.profile_self_correction) if args.profile_self_correction is not None else None
+            ),
+            'eval_test': True if args.eval_test else None,
             'device': args.device,
         },
         verbose=True,

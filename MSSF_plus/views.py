@@ -282,6 +282,190 @@ def train_and_impute_regress(
     return d9_pred, d10_pred
 
 
+def train_and_impute_ridge(
+    static_concat: np.ndarray,
+    static_avail: np.ndarray,
+    d9_raw: np.ndarray,
+    d10_raw: np.ndarray,
+    train_drugs: np.ndarray,
+    seed: int = 42,
+    n_splits: int = 5,
+    alphas: Tuple[float, ...] = (0.1, 1.0, 10.0, 50.0, 100.0, 200.0, 500.0, 1000.0),
+    return_ensemble: bool = False,
+):
+    """
+    Cheap C1 imputation variant (`regress_ridge`): K-fold cross-fitting (`n_splits=5`) of
+    multi-output Ridge regression on `train_drugs`.
+      - Uses the exact same K=5 cross-fit splits (`_make_drug_crossfit_splits`) as `regress`.
+      - In each cross-fit fold k, selects regularization `alpha` in `alphas` minimizing MSE
+        on `val_sub` (10% of the K-1 fit folds), then refits on `fit_sub U val_sub` (all K-1
+        fit folds) to predict out-of-fold for `holdout` and averages across the K models for
+        non-train drugs (`val_select`, `val_calib`, `test`).
+    """
+    x_all = np.hstack([static_concat, static_avail]).astype(np.float64)
+    y_all = np.hstack([d9_raw, d10_raw]).astype(np.float64)
+
+    tr_idx = np.unique(np.asarray(train_drugs, dtype=int))
+    eff_splits = max(2, min(int(n_splits), len(tr_idx)))
+    cf_splits = _make_drug_crossfit_splits(tr_idx, n_splits=eff_splits, val_frac=0.10, seed=seed)
+
+    oof_pred = np.zeros_like(y_all, dtype=np.float64)
+    ens_pred = np.zeros_like(y_all, dtype=np.float64)
+    non_train_mask = np.ones(N_DRUGS, dtype=bool)
+    non_train_mask[tr_idx] = False
+
+    def _fit_predict_dual_ridge(x_tr: np.ndarray, y_tr: np.ndarray, x_ev: np.ndarray, alpha: float) -> np.ndarray:
+        x_mean = x_tr.mean(axis=0, keepdims=True)
+        y_mean = y_tr.mean(axis=0, keepdims=True)
+        xc = x_tr - x_mean
+        yc = y_tr - y_mean
+        gram = xc @ xc.T
+        gram_reg = gram.copy()
+        gram_reg[np.diag_indices_from(gram_reg)] += float(alpha)
+        dual_coef = np.linalg.solve(gram_reg, yc)
+        pred = ((x_ev - x_mean) @ xc.T) @ dual_coef + y_mean
+        return np.clip(pred, 0.0, 1.0)
+
+    for fit_sub, val_sub, holdout in cf_splits:
+        x_fit = x_all[fit_sub]
+        y_fit = y_all[fit_sub]
+        x_val = x_all[val_sub]
+        y_val = y_all[val_sub]
+
+        x_mean = x_fit.mean(axis=0, keepdims=True)
+        y_mean = y_fit.mean(axis=0, keepdims=True)
+        xc = x_fit - x_mean
+        yc = y_fit - y_mean
+        gram = xc @ xc.T
+        k_val = (x_val - x_mean) @ xc.T
+
+        best_alpha = float(alphas[0])
+        best_val_mse = float('inf')
+        for a in alphas:
+            gram_reg = gram.copy()
+            gram_reg[np.diag_indices_from(gram_reg)] += float(a)
+            dual_coef = np.linalg.solve(gram_reg, yc)
+            pred_val = np.clip(k_val @ dual_coef + y_mean, 0.0, 1.0)
+            mse_val = float(np.mean((pred_val - y_val) ** 2))
+            if mse_val < best_val_mse:
+                best_val_mse = mse_val
+                best_alpha = float(a)
+
+        fit_full = np.concatenate([fit_sub, val_sub])
+        pred_k = _fit_predict_dual_ridge(x_all[fit_full], y_all[fit_full], x_all, best_alpha)
+        oof_pred[holdout] = pred_k[holdout]
+        ens_pred += pred_k / float(eff_splits)
+
+    final_pred = np.zeros_like(oof_pred)
+    final_pred[tr_idx] = oof_pred[tr_idx]
+    final_pred[non_train_mask] = ens_pred[non_train_mask]
+
+    d9_pred = final_pred[:, :N_DRUGS].copy()
+    d10_pred = final_pred[:, N_DRUGS:].copy()
+    np.fill_diagonal(d9_pred, 1.0)
+    np.fill_diagonal(d10_pred, 1.0)
+
+    if return_ensemble:
+        d9_ens = ens_pred[:, :N_DRUGS].copy()
+        d10_ens = ens_pred[:, N_DRUGS:].copy()
+        np.fill_diagonal(d9_ens, 1.0)
+        np.fill_diagonal(d10_ens, 1.0)
+        return d9_pred, d10_pred, d9_ens, d10_ens
+    return d9_pred, d10_pred
+
+
+def train_and_impute_knn(
+    static_drug_mats: List[np.ndarray],
+    static_avail: np.ndarray,
+    d9_raw: np.ndarray,
+    d10_raw: np.ndarray,
+    train_drugs: np.ndarray,
+    seed: int = 42,
+    n_splits: int = 5,
+    ks: Tuple[int, ...] = (5, 10, 15, 20, 30, 50),
+    return_ensemble: bool = False,
+):
+    """
+    Cheap C1 imputation variant (`regress_knn`): K-fold cross-fitting (`n_splits=5`) of
+    static-view k-nearest-neighbor row averaging on `train_drugs`.
+      - Computes the availability-weighted average static similarity across the 9 static drug
+        views (`D1..D8, D11`).
+      - Uses the exact same K=5 cross-fit splits (`_make_drug_crossfit_splits`) as `regress`.
+      - In each cross-fit fold, selects neighbor count `k` in `ks` minimizing MSE on `val_sub`,
+        then averages the `D9, D10` rows of the top-`k` nearest neighbors in `fit_sub U val_sub`
+        (excluding self) to predict out-of-fold for `holdout` and averages across the K folds
+        for non-train drugs (`val_select`, `val_calib`, `test`).
+    """
+    y_all = np.hstack([d9_raw, d10_raw]).astype(np.float64)
+
+    # Availability-weighted average static similarity across the 9 static drug views
+    sim_sum = np.zeros((N_DRUGS, N_DRUGS), dtype=np.float64)
+    sim_cnt = np.zeros((N_DRUGS, N_DRUGS), dtype=np.float64)
+    for v_idx, mat in enumerate(static_drug_mats):
+        av = (static_avail[:, v_idx] > 0.5).astype(np.float64)
+        pair_av = np.outer(av, av)
+        sim_sum += np.asarray(mat, dtype=np.float64) * pair_av
+        sim_cnt += pair_av
+    s_static = np.where(sim_cnt > 0.0, sim_sum / np.maximum(sim_cnt, 1.0), 0.0)
+
+    tr_idx = np.unique(np.asarray(train_drugs, dtype=int))
+    eff_splits = max(2, min(int(n_splits), len(tr_idx)))
+    cf_splits = _make_drug_crossfit_splits(tr_idx, n_splits=eff_splits, val_frac=0.10, seed=seed)
+
+    oof_pred = np.zeros_like(y_all, dtype=np.float64)
+    ens_pred = np.zeros_like(y_all, dtype=np.float64)
+    non_train_mask = np.ones(N_DRUGS, dtype=bool)
+    non_train_mask[tr_idx] = False
+
+    def _knn_avg_rows(query_idx: np.ndarray, ref_idx: np.ndarray, k_val: int) -> np.ndarray:
+        k_eff = min(int(k_val), len(ref_idx))
+        sim_sub = s_static[np.ix_(query_idx, ref_idx)].copy()
+        for qi, q_drug in enumerate(query_idx):
+            self_pos = np.where(ref_idx == q_drug)[0]
+            if len(self_pos) > 0:
+                sim_sub[qi, self_pos] = -1e9
+        top_pos = np.argsort(-sim_sub, axis=1)[:, :k_eff]
+        y_ref = y_all[ref_idx]
+        out = np.zeros((len(query_idx), y_all.shape[1]), dtype=np.float64)
+        for qi in range(len(query_idx)):
+            out[qi] = y_ref[top_pos[qi]].mean(axis=0)
+        return np.clip(out, 0.0, 1.0)
+
+    all_drug_idx = np.arange(N_DRUGS, dtype=int)
+    for fit_sub, val_sub, holdout in cf_splits:
+        best_k = int(ks[0])
+        best_val_mse = float('inf')
+        y_val = y_all[val_sub]
+        for k_cand in ks:
+            pred_val = _knn_avg_rows(val_sub, fit_sub, int(k_cand))
+            mse_val = float(np.mean((pred_val - y_val) ** 2))
+            if mse_val < best_val_mse:
+                best_val_mse = mse_val
+                best_k = int(k_cand)
+
+        fit_full = np.concatenate([fit_sub, val_sub])
+        pred_k = _knn_avg_rows(all_drug_idx, fit_full, best_k)
+        oof_pred[holdout] = pred_k[holdout]
+        ens_pred += pred_k / float(eff_splits)
+
+    final_pred = np.zeros_like(oof_pred)
+    final_pred[tr_idx] = oof_pred[tr_idx]
+    final_pred[non_train_mask] = ens_pred[non_train_mask]
+
+    d9_pred = final_pred[:, :N_DRUGS].copy()
+    d10_pred = final_pred[:, N_DRUGS:].copy()
+    np.fill_diagonal(d9_pred, 1.0)
+    np.fill_diagonal(d10_pred, 1.0)
+
+    if return_ensemble:
+        d9_ens = ens_pred[:, :N_DRUGS].copy()
+        d10_ens = ens_pred[:, N_DRUGS:].copy()
+        np.fill_diagonal(d9_ens, 1.0)
+        np.fill_diagonal(d10_ens, 1.0)
+        return d9_pred, d10_pred, d9_ens, d10_ens
+    return d9_pred, d10_pred
+
+
 class SinusoidalTimeEmb(nn.Module):
     def __init__(self, dim: int):
         super().__init__()
@@ -652,6 +836,28 @@ def build_fold_views(
             static_drug_concat, static_drug_avail, d9_raw, d10_raw,
             train_drugs=train_drugs, device=device, epochs=imp_epochs,
             seed=seed, n_splits=n_crossfit,
+        )
+        fallback_d9 = d9_pred.astype(np.float32)
+        fallback_d10 = d10_pred.astype(np.float32)
+        d9_final = d9_raw.copy()
+        d10_final = d10_raw.copy()
+        d9_final[missing_profile_mask] = d9_pred[missing_profile_mask]
+        d10_final[missing_profile_mask] = d10_pred[missing_profile_mask]
+    elif c1_impute == 'regress_ridge':
+        d9_pred, d10_pred = train_and_impute_ridge(
+            static_drug_concat, static_drug_avail, d9_raw, d10_raw,
+            train_drugs=train_drugs, seed=seed, n_splits=n_crossfit,
+        )
+        fallback_d9 = d9_pred.astype(np.float32)
+        fallback_d10 = d10_pred.astype(np.float32)
+        d9_final = d9_raw.copy()
+        d10_final = d10_raw.copy()
+        d9_final[missing_profile_mask] = d9_pred[missing_profile_mask]
+        d10_final[missing_profile_mask] = d10_pred[missing_profile_mask]
+    elif c1_impute == 'regress_knn':
+        d9_pred, d10_pred = train_and_impute_knn(
+            static_drug_mats, static_drug_avail, d9_raw, d10_raw,
+            train_drugs=train_drugs, seed=seed, n_splits=n_crossfit,
         )
         fallback_d9 = d9_pred.astype(np.float32)
         fallback_d10 = d10_pred.astype(np.float32)

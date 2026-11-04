@@ -171,6 +171,23 @@ class MiniDGLGraph:
         if isinstance(reduced, dict):
             self.ndata.update(reduced)
 
+    def remove_self_loop(self) -> 'MiniDGLGraph':
+        return remove_self_loop(self)
+
+    def add_self_loop(self) -> 'MiniDGLGraph':
+        return add_self_loop(self)
+
+    def clone(self) -> 'MiniDGLGraph':
+        return MiniDGLGraph(
+            src=self.src,
+            dst=self.dst,
+            num_nodes=self._num_nodes,
+            ndata=dict(self.ndata),
+            edata=dict(self.edata),
+            batch_num_nodes=self._batch_num_nodes.clone(),
+            batch_num_edges=self._batch_num_edges.clone(),
+        )
+
 
 # ============================================================
 # DGL Graph Construction & Batching Functions
@@ -476,8 +493,8 @@ def smiles_to_bigraph(
 
     g = graph((src_list, dst_list), num_nodes=num_atoms)
     if add_self_loop:
-        g = remove_self_loop(g)
-        g = add_self_loop(g)
+        g = g.remove_self_loop()
+        g = g.add_self_loop()
 
     if node_featurizer is not None:
         g.ndata.update(node_featurizer(mol))

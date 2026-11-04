@@ -51,9 +51,12 @@ def evaluate_loader(
     loss_type: str,
     device: torch.device,
     expected_pairs: Optional[np.ndarray] = None,
+    allow_train_pairs: bool = False,
 ) -> Tuple[Dict[str, float], np.ndarray, np.ndarray, np.ndarray]:
     """
-    Evaluate model on a DataLoader (`shuffle=False`) and return:
+    Evaluate model on a DataLoader (`shuffle=False`) in `model.eval()` mode
+    (no view_dropout, no module dropout, deterministic mu, hard labels, and
+    `profile_self_correction` applied if enabled on training pairs) and return:
       (metrics_dict, y_true_class_0_to_4, y_pred_class_0_to_4, probs_5class)
     """
     model.eval()
@@ -70,6 +73,12 @@ def evaluate_loader(
         fb_d10 = batch['fallback_d10'].to(device)
         d_idx = batch['drug_idx'].to(device)
         s_idx = batch['se_idx'].to(device)
+
+        if not allow_train_pairs and model._sc_y_train is not None:
+            y_ds_check = model._sc_y_train[d_idx, s_idx]
+            assert torch.all(y_ds_check == 0.0), (
+                "CRITICAL: Evaluation pair found with non-zero entry in Y_train!"
+            )
 
         logits, _, _, _, _, _, _, _ = model(
             drugs, sides, drug_avail=d_avail, se_avail=s_avail,
@@ -292,6 +301,22 @@ def run_single_fold(
     # Restore best checkpoint selected on val_select
     model.load_state_dict(best_state_dict)
 
+    # Evaluate training set in model.eval() mode (no view_dropout, no module dropout,
+    # deterministic mu, hard labels, and profile_self_correction applied if enabled)
+    train_eval_loader = torch.utils.data.DataLoader(
+        train_loader.dataset,
+        batch_size=int(cfg.get('eval_batch_size', 512)),
+        shuffle=False,
+        drop_last=False,
+        collate_fn=train_loader.collate_fn,
+    )
+    train_eval_final, _, _, _ = evaluate_loader(
+        model, train_eval_loader, loss_type=loss_type, device=device,
+        expected_pairs=fold_split.train, allow_train_pairs=True,
+    )
+    best_train_loop_macro_f1 = float(best_train_macro_f1)
+    best_train_macro_f1 = float(train_eval_final['MacroF1'])
+
     # Final evaluation on val_select and val_calib
     valsel_final, valsel_true_c, _, valsel_probs = evaluate_loader(
         model, valsel_loader, loss_type=loss_type, device=device,
@@ -361,9 +386,13 @@ def run_single_fold(
         'exp_name': exp_name,
         'split_type': split_type,
         'fold': int(fold),
+        'seed': int(base_seed),
         'best_epoch': int(best_epoch),
         'best_valsel_score': float(best_valsel_score),
         'best_train_macro_f1': float(best_train_macro_f1),
+        'best_train_loop_macro_f1': float(best_train_loop_macro_f1),
+        'train_eval_mode': True,
+        'train_eval_metrics': train_eval_final,
         'train_valsel_macro_f1_gap': float(train_valsel_gap),
         'epoch_valsel_macro_f1_curve': epoch_valsel_curve,
         'valsel_metrics': valsel_final,
@@ -385,6 +414,7 @@ def run_single_fold(
         ord_aps = valsel_conformal['Ordinal_APS']
         print(
             f"  --> Fold {fold} Done ({elapsed:.1f}s) | Best Epoch={best_epoch} | "
+            f"train(eval) MacroF1={best_train_macro_f1:.4f} | "
             f"valsel MacroF1={valsel_final['MacroF1']:.4f}, QWK={valsel_final['QWK']:.4f}, "
             f"MAE={valsel_final['MAE']:.4f} | Gap(tr-val)={train_valsel_gap:+.4f} | "
             f"valsel Ord-APS Cov={ord_aps['empirical_coverage']:.3f}, Size={ord_aps['avg_set_size']:.2f}"
@@ -448,7 +478,7 @@ def _try_restore_completed_fold(
     if all(os.path.exists(os.path.join(method_dir, f)) for f in req_files):
         with open(os.path.join(method_dir, f'fold_{fold}_summary.json'), 'r', encoding='utf-8') as f:
             summary_data = json.load(f)
-        if 'best_train_macro_f1' in summary_data:
+        if summary_data.get('train_eval_mode', False) is True and 'best_train_macro_f1' in summary_data:
             return summary_data
     return None
 
@@ -588,11 +618,14 @@ def main():
     parser.add_argument('--results_dir', type=str, default=DEFAULT_RESULTS_V2_DIR)
     parser.add_argument('--drive_dir', type=str, default=None, help='Optional Google Drive backup directory')
     parser.add_argument('--resume', action='store_true', help='Skip already completed folds')
+    parser.add_argument('--seed', type=int, default=None, help='Override random seed (default: 42)')
     parser.add_argument('--profile_self_correction', type=int, choices=[0, 1], default=None)
     parser.add_argument('--eval_test', action='store_true', help='Only enable in Stage 7 after final approval')
     args = parser.parse_args()
 
     overrides = {}
+    if args.seed is not None:
+        overrides['seed'] = int(args.seed)
     if args.epochs is not None:
         overrides['epochs'] = args.epochs
     if args.imputer_epochs is not None:
