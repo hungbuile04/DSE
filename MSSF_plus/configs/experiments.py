@@ -69,14 +69,21 @@ def _make_cfg(name: str, **overrides) -> Dict[str, object]:
 
 
 # Common C1 + C2 + C5 settings shared by MSSF_plus_full and the 6 C3 loss-selection configurations
+# (Default C1 imputer updated to 'regress_ridge' per Stage 2 follow-up decision)
 _FULL_NON_C3_KWARGS: Dict[str, object] = {
     'c1_use_availability': True,
     'c1_view_dropout_prob': 0.25,
-    'c1_impute': 'regress',
+    'c1_impute': 'regress_ridge',
     'c2_se_mode': 'plus_ontology',
     'c5_mode': 'multi_view',
     'c5_alpha': 0.15,
     'c5_aux_cluster_weight': 0.0,
+}
+
+# Legacy Stage 2 MLP kwargs preserved so Stage 2 folders on disk remain 1-to-1 reproducible
+_STAGE2_MLP_NON_C3_KWARGS: Dict[str, object] = {
+    **_FULL_NON_C3_KWARGS,
+    'c1_impute': 'regress',
 }
 
 
@@ -115,12 +122,14 @@ EXPERIMENTS: Dict[str, Dict[str, object]] = {
         c1_view_dropout_prob=0.25,
         c1_impute='mean',
     ),
+    # Kept as a single MLP ablation line in C1
     'C1_avail_vdrop_regress': _make_cfg(
         'C1_avail_vdrop_regress',
         c1_use_availability=True,
         c1_view_dropout_prob=0.25,
         c1_impute='regress',
     ),
+    # Default C1 imputer: regress_ridge
     'C1_avail_vdrop_ridge': _make_cfg(
         'C1_avail_vdrop_ridge',
         c1_use_availability=True,
@@ -137,9 +146,15 @@ EXPERIMENTS: Dict[str, Dict[str, object]] = {
         'C1_regress_no_modulator',
         c1_use_availability=False,
         c1_view_dropout_prob=0.25,
-        c1_impute='regress',
+        c1_impute='regress_ridge',
     ),
-    # Kept strictly as a single ablation line on dev folds (excluded from MSSF_plus_full, tuning, and 10-fold run)
+    'C1_ridge_no_modulator': _make_cfg(
+        'C1_ridge_no_modulator',
+        c1_use_availability=False,
+        c1_view_dropout_prob=0.25,
+        c1_impute='regress_ridge',
+    ),
+    # Excluded from all subsequent runs per Stage 2 follow-up decision
     'C1_avail_vdrop_diffusion': _make_cfg(
         'C1_avail_vdrop_diffusion',
         c1_use_availability=True,
@@ -158,10 +173,12 @@ EXPERIMENTS: Dict[str, Dict[str, object]] = {
     ),
 
     # 3. C3 — Ordinal Objective Selection ({ce, emd, corn} x {unweighted, weighted})
-    # Other components held as in MSSF_plus_full per Change 2
+    # Note: C3_ce_unweighted and C3_ce_unweighted_selfcorr retain _STAGE2_MLP_NON_C3_KWARGS
+    # to preserve their Stage 2 folders on disk, while C3_ce_unweighted_ridge(_selfcorr) and
+    # all other C3 configs use _FULL_NON_C3_KWARGS (c1_impute='regress_ridge').
     'C3_ce_unweighted': _make_cfg(
         'C3_ce_unweighted',
-        **_FULL_NON_C3_KWARGS,
+        **_STAGE2_MLP_NON_C3_KWARGS,
         c3_loss_type='ce',
         c3_class_weighting=False,
     ),
@@ -220,13 +237,12 @@ EXPERIMENTS: Dict[str, Dict[str, object]] = {
         c5_aux_cluster_weight=0.05,
     ),
 
-    # 5. Full MSSF_plus Model & Leave-One-Out (LOO) Ablations
-    # (Cluster head off by default; C3 loss finalized from fold 0-2 val_select comparison)
+    # 5. Full MSSF_plus Model & Leave-One-Out (LOO) Ablations (default C1 = regress_ridge)
     'MSSF_plus_full': _make_cfg(
         'MSSF_plus_full',
         c1_use_availability=True,
         c1_view_dropout_prob=0.25,
-        c1_impute='regress',
+        c1_impute='regress_ridge',
         c2_se_mode='plus_ontology',
         c3_loss_type='ce',
         c3_class_weighting=True,
@@ -250,7 +266,7 @@ EXPERIMENTS: Dict[str, Dict[str, object]] = {
         'loo_no_C2',
         c1_use_availability=True,
         c1_view_dropout_prob=0.25,
-        c1_impute='regress',
+        c1_impute='regress_ridge',
         c2_se_mode='original',
         c3_loss_type='ce',
         c3_class_weighting=True,
@@ -262,7 +278,7 @@ EXPERIMENTS: Dict[str, Dict[str, object]] = {
         'loo_no_C3',
         c1_use_availability=True,
         c1_view_dropout_prob=0.25,
-        c1_impute='regress',
+        c1_impute='regress_ridge',
         c2_se_mode='plus_ontology',
         c3_loss_type='ce',
         c3_class_weighting=False,
@@ -274,7 +290,7 @@ EXPERIMENTS: Dict[str, Dict[str, object]] = {
         'loo_no_C5',
         c1_use_availability=True,
         c1_view_dropout_prob=0.25,
-        c1_impute='regress',
+        c1_impute='regress_ridge',
         c2_se_mode='plus_ontology',
         c3_loss_type='ce',
         c3_class_weighting=True,
@@ -296,22 +312,22 @@ EXPERIMENTS: Dict[str, Dict[str, object]] = {
     ),
     'C3_ce_unweighted_selfcorr': _make_cfg(
         'C3_ce_unweighted_selfcorr',
-        **_FULL_NON_C3_KWARGS,
+        **_STAGE2_MLP_NON_C3_KWARGS,
         c3_loss_type='ce',
         c3_class_weighting=False,
         profile_self_correction=True,
     ),
-    # Cheap C1 imputation variants on MSSF_plus (`C3_ce_unweighted` with `regress_ridge` / `regress_knn`)
+    # C1 = regress_ridge / regress_knn on MSSF_plus (`C3_ce_unweighted`)
     'C3_ce_unweighted_ridge': _make_cfg(
         'C3_ce_unweighted_ridge',
-        **{**_FULL_NON_C3_KWARGS, 'c1_impute': 'regress_ridge'},
+        **_FULL_NON_C3_KWARGS,
         c3_loss_type='ce',
         c3_class_weighting=False,
         profile_self_correction=False,
     ),
     'C3_ce_unweighted_ridge_selfcorr': _make_cfg(
         'C3_ce_unweighted_ridge_selfcorr',
-        **{**_FULL_NON_C3_KWARGS, 'c1_impute': 'regress_ridge'},
+        **_FULL_NON_C3_KWARGS,
         c3_loss_type='ce',
         c3_class_weighting=False,
         profile_self_correction=True,
@@ -353,7 +369,7 @@ EXPERIMENTS: Dict[str, Dict[str, object]] = {
     ),
     'C3_ce_unweighted_s43': _make_cfg(
         'C3_ce_unweighted_s43',
-        **_FULL_NON_C3_KWARGS,
+        **_STAGE2_MLP_NON_C3_KWARGS,
         seed=43,
         c3_loss_type='ce',
         c3_class_weighting=False,
@@ -361,7 +377,7 @@ EXPERIMENTS: Dict[str, Dict[str, object]] = {
     ),
     'C3_ce_unweighted_s44': _make_cfg(
         'C3_ce_unweighted_s44',
-        **_FULL_NON_C3_KWARGS,
+        **_STAGE2_MLP_NON_C3_KWARGS,
         seed=44,
         c3_loss_type='ce',
         c3_class_weighting=False,
@@ -369,7 +385,7 @@ EXPERIMENTS: Dict[str, Dict[str, object]] = {
     ),
     'C3_ce_unweighted_selfcorr_s43': _make_cfg(
         'C3_ce_unweighted_selfcorr_s43',
-        **_FULL_NON_C3_KWARGS,
+        **_STAGE2_MLP_NON_C3_KWARGS,
         seed=43,
         c3_loss_type='ce',
         c3_class_weighting=False,
@@ -377,7 +393,7 @@ EXPERIMENTS: Dict[str, Dict[str, object]] = {
     ),
     'C3_ce_unweighted_selfcorr_s44': _make_cfg(
         'C3_ce_unweighted_selfcorr_s44',
-        **_FULL_NON_C3_KWARGS,
+        **_STAGE2_MLP_NON_C3_KWARGS,
         seed=44,
         c3_loss_type='ce',
         c3_class_weighting=False,

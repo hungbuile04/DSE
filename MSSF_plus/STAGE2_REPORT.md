@@ -135,3 +135,151 @@
    - Khi làm tròn dự đoán hồi quy (`np.round`), cả hai mô hình (`SDPred` dùng MSE loss, `MVSL-DSF` dùng BCE trên nhãn chia 5) đều bị sụp đổ ở hai lớp biên hiếm (`F1_c0 = 0.0000` cho cả hai; `F1_c4 = 0.0236` với `SDPred` và `0.0000` với `MVSL-DSF`), chỉ đạt `Macro-F1 = 0.2885` (`SDPred`) và `0.2811` (`MVSL-DSF`).
    - Khi bật `profile_self_correction=True`, `SDPred` giảm nhẹ `Macro-F1` từ `0.2885 -> 0.2810` (`-0.0075`), và `MVSL-DSF` giảm nhẹ từ `0.2811 -> 0.2779` (`-0.0032`).
    - Quyết định thiết kế cho bài báo: **bảng chính dùng `profile_self_correction = 1` cho mọi mô hình bị ảnh hưởng; phụ lục dùng thiết lập gốc (`profile_self_correction = 0`)**.
+
+---
+
+## 4. Kết Quả Bổ Sung Sau Giai Đoạn 2 (Mục 1–4)
+
+### 4.1. Mục 1: Xác Minh Danh Sách View & Bảng Tham Số Từng Module Từ `ARCHITECTURE_DUMP.md`
+
+#### Danh sách View Thuốc và View Phản Ứng Phụ thực tế trong đối tượng `MSSFPlusModel` đã khởi tạo
+- **View Thuốc (`n_drug_views = 11` cho cả `MSSF_v2` và `C3_ce_unweighted`, mỗi view `750` chiều, tổng chiều nối `11 × 750 = 8,250`)**:
+  1. `D1_stitch_one` (`750` chiều) — `Text_similarity_one.pkl`
+  2. `D2_stitch_two` (`750` chiều) — `Text_similarity_two.pkl`
+  3. `D3_stitch_three` (`750` chiều) — `Text_similarity_three.pkl`
+  4. `D4_stitch_four` (`750` chiều) — `Text_similarity_four.pkl`
+  5. `D5_stitch_five` (`750` chiều) — `Text_similarity_five.pkl`
+  6. `D6_mol2vec_cos` (`750` chiều) — cosine similarity của `drug_mol.pkl`
+  7. `D7_target_cos` (`750` chiều) — cosine similarity của `drug_target.pkl`
+  8. `D8_fingerprint` (`750` chiều) — `fingerprint_similarity.pkl`
+  9. `D9_profile_freq_cos` (`750` chiều) — cosine similarity trên ma trận tần suất `Y_train`
+  10. `D10_profile_bin_cos` (`750` chiều) — cosine similarity trên ma trận nhị phân `(Y_train > 0)`
+  11. `D11_pathway_enzyme` (`750` chiều) — `drug_pathway_enzyme_similarity.pkl`
+- **View Phản Ứng Phụ (`n_se_views = 4` ở `MSSF_v2` với tổng `4 × 994 = 3,976` chiều; `n_se_views = 5` ở `C3_ce_unweighted` với tổng `5 × 994 = 4,970` chiều)**:
+  1. `S1_adrecs_semantic` (`994` chiều) — `side_effect_semantic.pkl`
+  2. `S2_glove_cos` (`994` chiều) — cosine similarity của `glove_wordEmbedding.pkl`
+  3. `S3_profile_freq_cos` (`994` chiều) — cosine similarity trên `Y_train.T`
+  4. `S4_profile_bin_cos` (`994` chiều) — cosine similarity trên `(Y_train > 0).T`
+  5. `S5_meddra_ontology_cos` (`994` chiều, có trong `C3_ce_unweighted` khi `c2_se_mode='plus_ontology'`) — cosine similarity của `side_effect_label_750.mat['node_label']` (`994 × 243`)
+
+> **Giải thích nguyên nhân chênh lệch trong cột diễn giải tay trước đó**:
+> - Trong đối tượng mô hình thực tế (`MSSF_plus/ARCHITECTURE_DUMP.md` dòng 358–650 và 1041–1370), **`MSSF_v2` có đúng `11 + 4 = 15` view** và **`C3_ce_unweighted` có đúng `11 + 5 = 16` view** (hoàn toàn **không thiếu `S5` và không thiếu bất kỳ view thuốc nào** so với `MSSF` gốc; khác biệt duy nhất về kích thước thực thể so với `MSSF/model.py` gốc là bộ dữ liệu chuẩn hóa chung có `750` thuốc thay vì `757` thuốc).
+> - Các con số tham số trong Bảng 4.1A (`8,767`; `5,085`; `7,112,484`; `1,698,304`; `61,216`) đều được trích từ mô hình `11 + 5` view thực tế, nhưng cột *"Giải thích chênh lệch"* ở bản báo cáo trước bị gõ nhầm diễn giải tay (`10 -> 64 -> 10`, `4 -> 64 -> 4`, `14 nhánh`). Công thức tensor chính xác từ `ARCHITECTURE_DUMP.md` (dòng 1183–1245) như sau:
+
+#### Bảng 4.1A: Tham số từng module của `MSSF_v2` / `MSSF_v2_selfcorr` (`11 + 4` view) và `C3_ce_unweighted` / `C3_ce_unweighted_selfcorr` (`11 + 5` view)
+| Module | `MSSF_v2` (`11 + 4` view) | `C3_ce_unweighted` (`11 + 5` view) | Cấu trúc Tensor Thực Tế & Giải Thích Chênh Lệch (`ARCHITECTURE_DUMP.md` L1183–1260) |
+|---|---:|---:|---|
+| `drug_modulator` (`AvailabilityModulator`) | `0` | `8,767` | **`11` view thuốc (`750`-D)**: `missing_token:(1, 11, 750) = 8,250` + `gate_fc1: Linear(11, 22) = 264` + `gate_fc2: Linear(22, 11) = 253` $\Rightarrow 8,250 + 264 + 253 = \mathbf{8,767}$ |
+| `se_modulator` (`AvailabilityModulator`) | `0` | `5,085` | **`5` view SE (`994`-D)**: `missing_token:(1, 5, 994) = 4,970` + `gate_fc1: Linear(5, 10) = 60` + `gate_fc2: Linear(10, 5) = 55` $\Rightarrow 4,970 + 60 + 55 = \mathbf{5,085}$ |
+| `encoderConnection` (`EncoderConnection`) | `6,602,562` | `7,112,484` | Autoencoder nối toàn bộ các view: ở `MSSF_v2` chiều vào/ra là `11×750 + 4×994 = 12,226` (`Linear(12226, 256)` + Attention + `Linear(256, 128)` + `Linear(128, 256)` + `Linear(256, 12226)`); ở `C3_ce_unweighted` thêm `S5` (`994` chiều) nên chiều vào/ra là `11×750 + 5×994 = 13,220` (`+509,922` tham số từ `994×256 + 994×257`) |
+| `encoderAddition` (`EncoderAddition`) | `1,225,296` | `1,225,296` | Cộng từng phần các view thuốc (`750` chiều) và cộng từng phần các view SE (`994` chiều) rồi nối lại thành `750 + 994 = 1,744` chiều (`Linear(1744, 256)` + Attention + `Linear(256, 128)` + `Linear(128, 256)` + `Linear(256, 1744)`) |
+| `preprocess` (`Preprocess`) | `1,570,688` | `1,698,304` | Mỗi view có 1 nhánh chiếu tuyến tính sang `128` chiều: `MSSF_v2` có **`11` nhánh thuốc** (`11 × [Linear(750, 128) + BN(128)] = 1,060,224`) + **`4` nhánh SE** (`4 × [Linear(994, 128) + BN(128)] = 510,464`, tổng **15 nhánh**); `C3_ce_unweighted` có **`11` nhánh thuốc + `5` nhánh SE** (tổng **16 nhánh**, tăng `+127,616` tham số từ nhánh thứ 5 cho `S5`) |
+| `crossProduction` (`CrossProduction`) | `55,584` | `61,216` | Tích ngoài từng cặp view thuốc × SE: `MSSF_v2` có `11 × 4 = 44` kênh vào `Conv2d(44, 32, k=4, s=4)`; `C3_ce_unweighted` có `11 × 5 = 55` kênh vào `Conv2d(55, 32, k=4, s=4)` (tăng `11 × 32 × 4 × 4 = +5,632` tham số) |
+| `attention` (`Attention`) | `591,744` | `591,744` | Self-attention gộp 3 encoder (`inputdim = 384`, `heads = 4`) |
+| `gaussian_parametrizer` (`GaussianParametrizer`) | `49,280` | `49,280` | `h1: Linear(384, 64)` (`24,640`) + `h2: Linear(384, 64)` (`24,640`) |
+| `classifier` (`Classifier`) | `2,245` | `2,245` | `Linear(64, 32)` (`2,080`) + `Linear(32, 5)` (`165`) |
+| **Tổng cộng (`Total Parameters`)** | **`10,097,399`** | **`10,754,421`** | Chênh lệch `+657,022` tham số (`+6.51%`) |
+
+- **Xác nhận cấu hình `ProfileViewRegressor` thực tế đã dùng trong toàn bộ Giai đoạn 2**:
+  - Kiến trúc trong `MSSF_plus/views.py` (dòng 130–149) và `MSSF_plus/ARCHITECTURE_DUMP.md` (dòng 74–172): `6759 -> 256 -> 256 -> 1500` (`Linear(6759, 256) -> LayerNorm(256) -> SiLU -> Dropout(0.2) -> Linear(256, 256) -> LayerNorm(256) -> SiLU -> Dropout(0.2) -> Linear(256, 1500) -> Sigmoid`), tổng cộng **`2,182,876` tham số** cho mỗi mô hình con của Cross-fit.
+  - Huấn luyện trong `train_and_impute_regress` (`MSSF_plus/views.py` dòng 189–310): **`epochs = 80`**, **`batch_size = 64`**, `AdamW(lr=1e-3, weight_decay=1e-4)`, hàm mục tiêu **`loss = mse + 0.1 * cos`** (MSE kết hợp `1 - cosine_similarity`), chọn checkpoint tốt nhất theo validation MSE nội bộ trong từng fold của Cross-fit **`K = 5`**.
+  - **Giai đoạn 5 (Slim)**: Khởi động lại theo chỉ đạo mới (`encoderConnection` 6.6M–7.1M tham số là khối lớn nhất).
+
+---
+
+### 4.2. Mục 2: So Sánh Hai Biến Thể Bù Khuyết Rẻ (`regress_ridge`, `regress_knn`) Với `regress` (MLP) Trên Fold 0, Split B (Cross-fit $K = 5$)
+
+- Thiết lập thực nghiệm & số lượng thuốc chính xác trong mỗi lần Cross-fit (`_make_drug_crossfit_splits`, $K = 5$, `val_frac = 0.10`):
+  - **Trên Split B (Cold-start Drug)**: Trong mỗi fold (0..9), tập train có đúng **`540` thuốc** (`750` thuốc tổng trừ `75` thuốc `test`, `67` thuốc `val_select`, `68` thuốc `val_calib`). Khi chia Cross-fit $K = 5$, mỗi nhóm `holdout` nhận dự đoán OOF gồm **`108` thuốc** ($540 / 5 = 108$), và phần `pool` gồm **`432` thuốc** còn lại được chia thành **`389` thuốc `fit_sub`** (90%) để khớp bộ bù khuyết và **`43` thuốc `val_sub`** (10%) để chọn siêu tham số / dừng sớm.
+  - **Trên Split A (Warm-start Pair)**: Tập train có đủ **`750` thuốc**; chia Cross-fit $K = 5$ gồm **`150` thuốc `holdout`**, phần `pool` **`600` thuốc** chia thành **`540` thuốc `fit_sub`** (90%) và **`60` thuốc `val_sub`** (10%).
+  - **`regress_ridge`**: Hồi quy tuyến tính Ridge đa đầu ra ($\hat{Y} = X_s W + b$) với chuẩn hóa đặc trưng tĩnh + tìm lưới $\alpha \in \{0.1, 1, 10, 100, 500, 1000, 2500, 5000, 10000\}$ tối ưu hóa trực tiếp lỗi bình phương trung bình trên tập `val_sub` (`43` thuốc trên Split B) bên trong từng fold của Cross-fit $K = 5$ bằng phân rã SVD, sau đó cắt miền giá trị về $[0, 1]$. Số tham số mạng học sâu bổ sung: **`0`**.
+  - **`regress_knn`**: Lấy trung bình có trọng số độ tương đồng cosine của các hàng `D9, D10` thuộc $k$ thuốc train gần nhất trong `fit_sub` (`389` thuốc trên Split B) theo các view tĩnh khả dụng ($k \in \{3, 5, 10, 15, 20, 30\}$ được chọn trên `val_sub`). Số tham số: **`0`**.
+
+#### Bảng 4.2A: Chất lượng bù khuyết trực tiếp trên `val_select` (Fold 0, Split B — 67 thuốc cold-start, Cross-fit $K = 5$)
+| Phương pháp C1 ($K=5$) | Avg MSE $\downarrow$ | Avg Spearman $\uparrow$ | Avg Top-10 Overlap (%) $\uparrow$ | D9 MSE | D9 Spearman | D9 Top-10 | D10 MSE | D10 Spearman | D10 Top-10 | Thời gian bù khuyết (s) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `mean` (baseline tĩnh) | 0.010361 | 0.6365 | 7.46% | 0.010922 | 0.6456 | 7.91% | 0.009799 | 0.6273 | 7.01% | 0.00 |
+| `regress_knn` | 0.009782 | 0.6482 | 10.45% | 0.010271 | 0.6565 | 10.90% | 0.009292 | 0.6399 | 10.00% | 0.52 |
+| `diffusion` (MLP denoiser) | 0.010614 | 0.6693 | 14.03% | 0.011042 | 0.6788 | 15.22% | 0.010187 | 0.6598 | 12.84% | 54.29 |
+| `regress` (MLP hiện tại) | 0.009274 | 0.6843 | 14.78% | 0.009696 | 0.6929 | 16.57% | 0.008852 | 0.6758 | 12.99% | 30.17 |
+| **`regress_ridge`** | **0.008656** | **0.7054** | **22.24%** | **0.009029** | **0.7136** | **22.99%** | **0.008283** | **0.6971** | **21.49%** | **1.11** |
+
+#### Bảng 4.2B: Hiệu năng Downstream của `MSSF_plus` (`C3_ce_unweighted`) trên Fold 0, Split B (`val_select`)
+| Cấu hình | `SelfCorr` | Bộ bù khuyết C1 ($K=5$) | Best Ep | `train(eval)` Macro-F1 | `val_select` Macro-F1 | Weighted-F1 | Accuracy | QWK | MAE | `Gap(eval)` | Ord-APS Cov | Ord-APS Size | Tổng thời gian (s) |
+|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| **`C3_ce_unweighted_ridge_selfcorr`** | **1** | **`regress_ridge`** | 17 | 0.7174 | **0.4322** | 0.5248 | 0.5263 | **0.5440** | 0.5453 | **+0.2851** | 0.911 | 2.54 | 121.8 |
+| `C3_ce_unweighted_selfcorr` | 1 | `regress` (MLP) | 40 | 0.8249 | 0.4285 | **0.5274** | **0.5296** | 0.5355 | **0.5390** | +0.3964 | 0.896 | 2.51 | 144.5 |
+| `C3_ce_unweighted_knn_selfcorr` | 1 | `regress_knn` | 16 | 0.7068 | 0.4192 | 0.5251 | 0.5257 | 0.5353 | 0.5477 | +0.2876 | 0.893 | 2.47 | 119.1 |
+| `C3_ce_unweighted` | 0 | `regress` (MLP) | 12 | 0.6879 | **0.4426** | 0.5227 | 0.5296 | **0.5561** | 0.5588 | **+0.2453** | 0.903 | 2.58 | 139.3 |
+| `C3_ce_unweighted_ridge` | 0 | `regress_ridge` | 17 | 0.7236 | 0.4320 | 0.5208 | 0.5170 | 0.5503 | 0.5664 | +0.2917 | 0.909 | 2.61 | 116.6 |
+| `C3_ce_unweighted_knn` | 0 | `regress_knn` | 40 | 0.8487 | 0.4295 | **0.5367** | **0.5462** | 0.5449 | **0.5257** | +0.4191 | 0.886 | 2.48 | 114.0 |
+
+- **Nhận xét quan trọng (Mục 2)**:
+  1. Về **chất lượng bù khuyết trực tiếp (Bảng 4.2A)**, với đúng **`540` thuốc train trên Split B** (trong mỗi lần cross-fit dùng **`389` thuốc `fit_sub`**, **`43` thuốc `val_sub`**, **`108` thuốc `holdout`**, đặc trưng tĩnh nối liền `6,759` chiều), **`regress_ridge` vượt qua cả `regress` (MLP) lẫn `diffusion` trên mọi chỉ số**: giảm `Avg MSE` từ `0.009274 -> 0.008656`, tăng `Avg Spearman` từ `0.6843 -> 0.7054`, và **tăng gấp 1.5 lần tỷ lệ trùng láng giềng gần nhất `Top-10 Overlap` (`22.24%` so với `14.78%` của MLP và `7.46%` của `mean`)**, trong khi thời gian chạy chỉ mất **`1.11s`** (nhanh gấp 27 lần so với MLP `30.17s` và không tốn bất kỳ mạng nơ-ron phụ trợ nào).
+  2. Về **hiệu năng downstream của `MSSF_plus` (Bảng 4.2B)**:
+     - Ở thiết lập bảng chính (`profile_self_correction = 1`), trên Fold 0 Split B, **`C3_ce_unweighted_ridge_selfcorr` đạt `Macro-F1 = 0.4322` và `QWK = 0.5440`**, cao hơn `C3_ce_unweighted_selfcorr` dùng MLP (`Macro-F1 = 0.4285`, `QWK = 0.5355`).
+     - Quyết định thiết kế: **Chuyển bộ bù khuyết C1 mặc định sang `regress_ridge`**; giữ `regress` (MLP) làm một dòng ablation; loại bỏ hoàn toàn `diffusion` khỏi mọi lần chạy tiếp theo.
+
+---
+
+### 4.3. Mục 3: Định Nghĩa Lại `Gap` Nhất Quán (`model.eval()`) & Tính Lại Cho Giai Đoạn 2
+
+- **Định nghĩa chính thức của `Gap(eval)`**:
+  $$\text{Gap}_{\text{eval}} = \text{Macro-F1}_{\text{train}}^{\text{eval}} - \text{Macro-F1}_{\text{val\_select}}^{\text{eval}}$$
+  trong đó $\text{Macro-F1}_{\text{train}}^{\text{eval}}$ được tính tại đúng checkpoint tốt nhất (`best_epoch`) ở chế độ **`model.eval()`**:
+  1. **Không bật `view_dropout`** (`c1_view_dropout_prob` không kích hoạt khi `self.training == False`) và không bật `nn.Dropout`.
+  2. Dùng **biểu diễn tất định** (`mu` thay vì lấy mẫu nhiễu $z = \mu + \epsilon \sigma$).
+  3. So khớp với **nhãn cứng (hard labels)** của tập train.
+  4. **Đặc trưng giống hệt lúc đánh giá**: sử dụng cùng ma trận view (`D9, D10` OOF đã cố định) và nếu `profile_self_correction = 1` thì **áp dụng sửa rò rỉ cho từng cặp `(d, s)` thuộc tập train** khi tính $\text{Macro-F1}_{\text{train}}^{\text{eval}}$.
+
+#### Bảng 4.3: So sánh `Gap(eval)` (Định nghĩa mới chuẩn hóa) và `Gap(train loop)` (Định nghĩa cũ trong vòng lặp train) trên 3 Fold Giai Đoạn 2
+| Method | Split | `train(eval)` Macro-F1 | `val_select` Macro-F1 | **`Gap (eval tr - val)`** | `Gap (train loop cũ)` | Giải thích sự thay đổi |
+|---|---:|---:|---:|---:|---:|---|
+| `C3_ce_unweighted_selfcorr` | B | `0.7642 ± 0.0471` | `0.4169 ± 0.0259` | **`+0.3473 ± 0.0560`** | `+0.2933 ± 0.0507` | Khi tắt `view_dropout=0.25` & `Dropout=0.4` ở `eval()`, `train F1` tăng thêm `+0.0540` |
+| `C3_ce_unweighted` | B | `0.6963 ± 0.0390` | `0.4266 ± 0.0275` | **`+0.2697 ± 0.0659`** | `+0.2028 ± 0.0826` | Khi tắt `view_dropout=0.25` & `Dropout=0.4` ở `eval()`, `train F1` tăng thêm `+0.0669` |
+| `MSSF_v2_selfcorr` | B | `0.6634 ± 0.0420` | `0.3593 ± 0.0095` | **`+0.3041 ± 0.0396`** | `+0.3214 ± 0.0775` | `MSSF_v2` không có `view_dropout`, nên `train(eval)` sát với `train(loop)` |
+| `MSSF_v2` | B | `0.7100 ± 0.0367` | `0.3599 ± 0.0318` | **`+0.3501 ± 0.0619`** | `+0.3431 ± 0.0608` | Chênh lệch nhỏ (`+0.0070`) do tắt `Dropout(0.4)` và lấy `mu` tất định |
+| `C3_ce_unweighted_selfcorr` | A | `0.8381 ± 0.0432` | `0.6479 ± 0.0082` | **`+0.1901 ± 0.0493`** | `+0.1333 ± 0.0122` | Tắt `view_dropout=0.25` ở `eval()` làm tăng `train F1` thêm `+0.0568` |
+| `C3_ce_unweighted` | A | `0.8436 ± 0.0181` | `0.6454 ± 0.0099` | **`+0.1982 ± 0.0275`** | `+0.1332 ± 0.0090` | Tắt `view_dropout=0.25` ở `eval()` làm tăng `train F1` thêm `+0.0650` |
+| `MSSF_v2_selfcorr` | A | `0.8234 ± 0.0402` | `0.6421 ± 0.0054` | **`+0.1813 ± 0.0439`** | `+0.1445 ± 0.0055` | Tắt `Dropout(0.4)` và lấy `mu` tất định ở `eval()` |
+| `MSSF_v2` | A | `0.8401 ± 0.0221` | `0.6506 ± 0.0140` | **`+0.1896 ± 0.0114`** | `+0.1408 ± 0.0119` | Tắt `Dropout(0.4)` và lấy `mu` tất định ở `eval()` |
+
+- **Nhận xét bắt buộc về `Gap(eval)`**: **`Gap(eval)` của `MSSF_plus` không nhỏ hơn `MSSF_v2` (trên Split B với `SelfCorr=1`: `+0.3473 ± 0.0560` so với `+0.3041 ± 0.0396`; trên Split A: `+0.1901 ± 0.0493` so với `+0.1813 ± 0.0439`; trên Fold 0 Split B qua 3 seed ở Bảng 4.4B: `+0.3610 ± 0.0296` so với `+0.2918 ± 0.0208`) — do đó hoàn toàn không kết luận về mức overfit.**
+
+---
+
+### 4.4. Mục 4: Ước Lượng Nhiễu Giữa Các Lần Chạy (`Seed 42, 43, 44`) Trên Fold 0, Split B
+
+#### Bảng 4.4A: Kết quả từng Seed (`42, 43, 44`) trên Fold 0, Split B (`val_select`)
+| Nhóm mô hình | `SelfCorr` | Seed | Best Ep | `train(eval)` F1 | `val_select` Macro-F1 | Weighted-F1 | Accuracy | QWK | MAE | `Gap(eval)` |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `MSSF_v2` | 0 | 42 | 22 | 0.6744 | 0.3430 | 0.4558 | 0.4574 | 0.4512 | 0.6828 | +0.3315 |
+| `MSSF_v2_s43` | 0 | 43 | 22 | 0.6606 | 0.3523 | 0.4486 | 0.4713 | 0.4323 | 0.6302 | +0.3083 |
+| `MSSF_v2_s44` | 0 | 44 | 15 | 0.6644 | 0.3790 | 0.4636 | 0.4962 | 0.4608 | 0.6148 | +0.2853 |
+| `MSSF_v2_selfcorr` | 1 | 42 | 19 | 0.6194 | 0.3536 | 0.4652 | 0.4580 | 0.4141 | 0.7262 | +0.2659 |
+| `MSSF_v2_selfcorr_s43` | 1 | 43 | 22 | 0.6500 | 0.3573 | 0.4494 | 0.4598 | 0.4437 | 0.7334 | +0.2927 |
+| `MSSF_v2_selfcorr_s44` | 1 | 44 | 25 | 0.6778 | 0.3609 | 0.4955 | 0.5471 | 0.4561 | 0.5805 | +0.3169 |
+| `C3_ce_unweighted` | 0 | 42 | 12 | 0.6879 | 0.4426 | 0.5227 | 0.5296 | 0.5561 | 0.5588 | +0.2453 |
+| `C3_ce_unweighted_s43` | 0 | 43 | 34 | 0.8071 | 0.4318 | 0.5271 | 0.5257 | 0.5141 | 0.5649 | +0.3752 |
+| `C3_ce_unweighted_s44` | 0 | 44 | 29 | 0.7793 | 0.4289 | 0.5323 | 0.5284 | 0.5441 | 0.5652 | +0.3504 |
+| `C3_ce_unweighted_selfcorr` | 1 | 42 | 40 | 0.8249 | 0.4285 | 0.5274 | 0.5296 | 0.5355 | 0.5390 | +0.3964 |
+| `C3_ce_unweighted_selfcorr_s43` | 1 | 43 | 33 | 0.7995 | 0.4369 | 0.5340 | 0.5351 | 0.5407 | 0.5410 | +0.3626 |
+| `C3_ce_unweighted_selfcorr_s44` | 1 | 44 | 25 | 0.7524 | 0.4284 | 0.5403 | 0.5441 | 0.5272 | 0.5393 | +0.3240 |
+
+#### Bảng 4.4B: Tổng hợp Nhiễu Giữa Các Seed (`Mean ± Std` qua 3 Seeds `42, 43, 44` trên Fold 0, Split B)
+| Nhóm mô hình (Fold 0, Split B) | `SelfCorr` | `Macro-F1` (`Mean ± Std`) | `QWK` (`Mean ± Std`) | `Weighted-F1` (`Mean ± Std`) | `MAE` (`Mean ± Std`) | `Gap(eval)` (`Mean ± Std`) |
+|---|---:|---:|---:|---:|---:|---:|
+| `MSSF_v2` | 0 | `0.3581 ± 0.0153` | `0.4481 ± 0.0119` | `0.4560 ± 0.0061` | `0.6426 ± 0.0289` | `+0.3084 ± 0.0189` |
+| `MSSF_v2_selfcorr` | 1 | `0.3573 ± 0.0030` | `0.4380 ± 0.0179` | `0.4700 ± 0.0201` | `0.6800 ± 0.0704` | `+0.2918 ± 0.0208` |
+| **`C3_ce_unweighted`** | 0 | **`0.4344 ± 0.0059`** | **`0.5381 ± 0.0177`** | **`0.5274 ± 0.0039`** | **`0.5629 ± 0.0029`** | `+0.3236 ± 0.0562` |
+| **`C3_ce_unweighted_selfcorr`** | 1 | **`0.4313 ± 0.0040`** | **`0.5345 ± 0.0056`** | **`0.5339 ± 0.0053`** | **`0.5398 ± 0.0009`** | `+0.3610 ± 0.0296` |
+
+- **Nhận xét khoa học (Mục 4)**:
+  1. **Biên độ nhiễu giữa các seed (`run-to-run noise`) rất nhỏ**: Đối với `C3_ce_unweighted_selfcorr` (`0.4313 ± 0.0040`), `C3_ce_unweighted` (`0.4344 ± 0.0059`), và `MSSF_v2_selfcorr` (`0.3573 ± 0.0030`), độ lệch chuẩn qua 3 seed chỉ nằm trong khoảng **`0.0030 – 0.0059` Macro-F1** (và `0.0153` đối với `MSSF_v2` gốc).
+  2. **Ảnh hưởng của `profile_self_correction` nằm gọn trong biên độ nhiễu seed**:
+     - Trên `MSSF_v2`: `0.3581 ± 0.0153` (`SelfCorr=0`) so với `0.3573 ± 0.0030` (`SelfCorr=1`), chênh lệch chỉ `-0.0008`.
+     - Trên `C3_ce_unweighted`: `0.4344 ± 0.0059` (`SelfCorr=0`) so với `0.4313 ± 0.0040` (`SelfCorr=1`), chênh lệch chỉ `-0.0031` (nhỏ hơn 1 độ lệch chuẩn seed).
+  3. **Mức cải thiện của `MSSF_plus` so với `MSSF_v2` lớn gấp nhiều lần nhiễu seed**:
+     - Ở `SelfCorr=1`: `0.4313 ± 0.0040` so với `0.3573 ± 0.0030` (**`+0.0740` Macro-F1**, lớn gấp **$>18$ lần** độ lệch chuẩn seed; **`+0.0965` QWK**; **`-0.1402` MAE**).
+     - Ở `SelfCorr=0`: `0.4344 ± 0.0059` so với `0.3581 ± 0.0153` (**`+0.0763` Macro-F1**, **`+0.0900` QWK**).
+
