@@ -95,11 +95,16 @@ def _eval_imputation_matrix(
     }
 
 
-def evaluate_c1_imputation_quality_fold0_split_b(seed: int = 42) -> Dict[str, Dict[str, float]]:
+def evaluate_c1_imputation_quality_fold0_split_b(
+    seed: int = 42,
+    device: Optional[torch.device] = None,
+) -> Dict[str, Dict[str, float]]:
     """
     Compare C1 imputation quality (`mean`, `regress_knn`, `diffusion`, `regress` MLP,
     and `regress_ridge`, all with cross-fit K=5) on Fold 0, Split B (`val_select` 67 cold-start drugs).
     """
+    if device is None:
+        device = torch.device('cpu')
     fold_split = load_fold_data(0, 'B')
     train_drugs = np.unique(fold_split.train_drugs)
     valsel_drugs = np.unique(fold_split.valsel_drugs)
@@ -152,7 +157,7 @@ def evaluate_c1_imputation_quality_fold0_split_b(seed: int = 42) -> Dict[str, Di
     set_global_seed(seed)
     d9_mlp, d10_mlp = train_and_impute_regress(
         static_drug_concat, static_drug_avail, d9_raw, d10_raw,
-        train_drugs=train_drugs, device=torch.device('cpu'), epochs=80,
+        train_drugs=train_drugs, device=device, epochs=80,
         seed=seed, n_splits=5,
     )
     t_mlp = time.time() - t0
@@ -162,7 +167,7 @@ def evaluate_c1_imputation_quality_fold0_split_b(seed: int = 42) -> Dict[str, Di
     set_global_seed(seed)
     d9_diff, d10_diff = train_and_impute_diffusion(
         static_drug_concat, static_drug_avail, d9_raw, d10_raw,
-        train_drugs=train_drugs, device=torch.device('cpu'),
+        train_drugs=train_drugs, device=device,
         n_timesteps=25, n_samples=10, epochs=100,
         seed=seed, n_splits=5,
     )

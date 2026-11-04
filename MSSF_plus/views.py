@@ -305,9 +305,8 @@ def train_and_impute_ridge(
     x_all = np.hstack([static_concat, static_avail]).astype(np.float64)
     y_all = np.hstack([d9_raw, d10_raw]).astype(np.float64)
 
-    tr_idx = np.unique(np.asarray(train_drugs, dtype=int))
-    eff_splits = max(2, min(int(n_splits), len(tr_idx)))
-    cf_splits = _make_drug_crossfit_splits(tr_idx, n_splits=eff_splits, val_frac=0.10, seed=seed)
+    tr_idx, cf_folds = _make_drug_crossfit_splits(train_drugs, n_splits=n_splits, val_frac=0.10, seed=seed)
+    eff_splits = len(cf_folds)
 
     oof_pred = np.zeros_like(y_all, dtype=np.float64)
     ens_pred = np.zeros_like(y_all, dtype=np.float64)
@@ -326,7 +325,7 @@ def train_and_impute_ridge(
         pred = ((x_ev - x_mean) @ xc.T) @ dual_coef + y_mean
         return np.clip(pred, 0.0, 1.0)
 
-    for fit_sub, val_sub, holdout in cf_splits:
+    for fit_sub, val_sub, holdout, _fold_seed in cf_folds:
         x_fit = x_all[fit_sub]
         y_fit = y_all[fit_sub]
         x_val = x_all[val_sub]
@@ -408,9 +407,8 @@ def train_and_impute_knn(
         sim_cnt += pair_av
     s_static = np.where(sim_cnt > 0.0, sim_sum / np.maximum(sim_cnt, 1.0), 0.0)
 
-    tr_idx = np.unique(np.asarray(train_drugs, dtype=int))
-    eff_splits = max(2, min(int(n_splits), len(tr_idx)))
-    cf_splits = _make_drug_crossfit_splits(tr_idx, n_splits=eff_splits, val_frac=0.10, seed=seed)
+    tr_idx, cf_folds = _make_drug_crossfit_splits(train_drugs, n_splits=n_splits, val_frac=0.10, seed=seed)
+    eff_splits = len(cf_folds)
 
     oof_pred = np.zeros_like(y_all, dtype=np.float64)
     ens_pred = np.zeros_like(y_all, dtype=np.float64)
@@ -432,7 +430,7 @@ def train_and_impute_knn(
         return np.clip(out, 0.0, 1.0)
 
     all_drug_idx = np.arange(N_DRUGS, dtype=int)
-    for fit_sub, val_sub, holdout in cf_splits:
+    for fit_sub, val_sub, holdout, _fold_seed in cf_folds:
         best_k = int(ks[0])
         best_val_mse = float('inf')
         y_val = y_all[val_sub]
