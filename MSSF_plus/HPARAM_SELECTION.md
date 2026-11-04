@@ -16,7 +16,7 @@
 | Số epoch huấn luyện | `epochs` (`experiments.py`) | `50` | Kế thừa nguyên bản từ `MSSF/mssf.py` & `notebook1` | **Không** | Cố định |
 | Kích thước mini-batch | `batch_size` / `eval_batch_size` | `512` / `512` | Kế thừa từ cấu hình chạy chuẩn của `MSSF` | **Không** | Cố định |
 | Tốc độ học & L2 decay | `lr` / `weight_decay` | `1e-4` / `1e-5` | Kế thừa nguyên bản từ `MSSF/mssf.py` (Adam) | **Không** | Cố định |
-| Tỷ lệ Dropout backbone | `dropout` (`model.py`) | `0.4` | Kế thừa nguyên bản từ `MSSF/mssf.py` | **Không** | Cố định |
+| Tỷ lệ Dropout backbone | `dropout` (`experiments.py`, `model.py`) | `0.4` | Kế thừa nguyên bản từ `MSSF/mssf.py` (`Dropout(p=0.4, inplace=False)` trong `print(model)`) | **Không** | Cố định |
 | Chiều không gian BVI | `gp` (`model.py`) | `64` | Kế thừa nguyên bản từ `MSSF/mssf.py` | **Không** | Cố định |
 | Số đầu Self-Attention | `heads` (`model.py`) | `4` | Kế thừa nguyên bản từ `MSSF/model.py` | **Không** | Cố định |
 | Trọng số loss phụ MSSF gốc | `kl_weight`, `rec_con_weight`, `rec_add_weight` | `1e-3`, `1e-4`, `1e-4` | Kế thừa nguyên bản từ `MSSF/mssf.py` L306 (không coi là thành phần mới) | **Không** | Cố định |
@@ -28,13 +28,13 @@
 
 | Siêu tham số | Khóa trong `cfg` / vị trí code | Giá trị hiện tại | Cách đã chọn / Nguồn gốc | Có dùng `test`? | Trạng thái |
 | :--- | :--- | :---: | :--- | :---: | :--- |
-| Chiến lược bù khuyết | `c1_impute` (`views.py`) | `'regress'` | Chọn qua kiểm chứng MSE/Spearman/Top-10 trên `val_select` Fold 0 và đối chiếu `Macro-F1` trên `val_select` Fold 0–2 (`mean` vs `regress`) | **Không** | Kiểm chứng trên `val_select` |
+| Chiến lược bù khuyết | `c1_impute` (`views.py`) | `'regress_ridge'` | Chọn qua kiểm chứng MSE/Spearman/Top-10 trên `val_select` Fold 0 và đối chiếu `Macro-F1`, `QWK`, `MAE` trên `val_select` Fold 0–2 (`regress_ridge` vs `regress` MLP vs `mean`) | **Không** | Mặc định chính thức (`regress` MLP giữ làm 1 dòng ablation; bỏ `diffusion`) |
 | Số nhóm cross-fitting $K$ | `c1_crossfit_folds` (`views.py`) | `5` | Chuẩn 5-fold cross-fitting theo thuốc trên `train_drugs` | **Không** | Cố định theo thiết kế |
-| Tỷ lệ tách early-stop nội bộ | `val_frac` (`_make_drug_crossfit_splits`) | `0.10` (10%) | Tách nội bộ 10% từ 4 nhóm `train_drugs` để chọn best epoch cho từng regressor | **Không** | Cố định theo thiết kế |
-| Số epoch tối đa của `ProfileViewRegressor` | `c1_imputer_epochs` (`views.py`) | `80` | Có early-stopping nội bộ trên 10% `val_sub` của `train_drugs` | **Không** | Tự chọn qua `val_sub` |
-| Kiến trúc & tối ưu `ProfileViewRegressor` | `hidden_dim=256`, `dropout=0.2`, `lr=1e-3`, `wd=1e-4`, `batch_size=64`, `cos_weight=0.1` | Cố định trong `views.py` L133–236 | Thiết kế MLP chuẩn; chọn epoch bằng MSE trên `val_sub` (10% `train_drugs`) | **Không** | Cố định |
-| Siêu tham số `diffusion` (`T`, `B`, `epochs`, $\beta$) | `c1_diffusion_steps=25`, `c1_diffusion_samples=10`, `c1_diffusion_epochs=100`, $\beta \in [10^{-4}, 0.2]$ | Cố định trong `views.py` L343–408 | Do `diffusion` có MSE trên `val_select` Split B cao hơn `mean` (`0.010614 > 0.010361`), đã **loại khỏi `MSSF_plus_full`, loại khỏi ngân sách tune và loại khỏi chạy 10 fold** (chỉ giữ 1 dòng ở bảng ablation C1) | **Không** | Đã đóng băng (chỉ dùng cho 1 dòng ablation) |
-| Biên độ cổng điều biến `AvailabilityModulator` | Hệ số `0.2` trong $1 + 0.2\tanh(\cdot)$ (`model.py` L75) | `0.2` | Thiết kế kiến trúc khởi tạo đồng nhất ($W_2=0, b_2=0, m_v=0 \implies \tilde{X}=X$ tại $t=0$); kiểm chứng qua ablation `C1_regress_no_modulator` trên `val_select` | **Không** | Kiểm chứng qua ablation trên `val_select` |
+| Tỷ lệ tách early-stop nội bộ | `val_frac` (`_make_drug_crossfit_splits`) | `0.10` (10%) | Tách nội bộ 10% từ 4 nhóm `train_drugs` để chọn $\alpha$ (cho `regress_ridge`) hoặc best epoch (cho `ProfileViewRegressor` MLP) | **Không** | Cố định theo thiết kế |
+| Số epoch tối đa của `ProfileViewRegressor` (ablation MLP) | `c1_imputer_epochs` (`views.py`) | `80` | Có early-stopping nội bộ trên 10% `val_sub` của `train_drugs` | **Không** | Tự chọn qua `val_sub` |
+| Kiến trúc & tối ưu `ProfileViewRegressor` (ablation MLP) | `hidden_dim=256`, `dropout=0.2`, `lr=1e-3`, `wd=1e-4`, `batch_size=64`, `cos_weight=0.1` | Cố định trong `views.py` L133–236 | Thiết kế MLP chuẩn; chọn epoch bằng MSE trên `val_sub` (10% `train_drugs`) | **Không** | Cố định (chỉ dùng cho dòng ablation MLP) |
+| Siêu tham số `diffusion` (`T`, `B`, `epochs`, $\beta$) | `c1_diffusion_steps=25`, `c1_diffusion_samples=10`, `c1_diffusion_epochs=100`, $\beta \in [10^{-4}, 0.2]$ | Cố định trong `views.py` L343–408 | Do `diffusion` có MSE trên `val_select` Split B cao hơn `mean` (`0.010614 > 0.010361`), đã **bỏ khỏi mọi lần chạy tiếp theo** | **Không** | Đã loại bỏ |
+| Biên độ cổng điều biến `AvailabilityModulator` | Hệ số `0.2` trong $1 + 0.2\tanh(\cdot)$ (`model.py` L75) | `0.2` | Thiết kế kiến trúc khởi tạo đồng nhất ($W_2=0, b_2=0, m_v=0 \implies \tilde{X}=X$ tại $t=0$); kiểm chứng qua ablation `C1_ridge_no_modulator` trên `val_select` | **Không** | Kiểm chứng qua ablation trên `val_select` |
 | **Xác suất Profile View Dropout khi train** | `c1_view_dropout_prob` (`experiments.py`) | `0.25` | Khởi tạo heuristic ban đầu ($0.25$), **chưa chọn trên `val_select`** | **Không** | **Sẽ tune trên `val_select` fold 0–2 (trong ngân sách $\le 6$ cấu hình)** |
 
 ---
@@ -51,7 +51,7 @@
 
 | Siêu tham số | Khóa trong `cfg` / vị trí code | Giá trị hiện tại | Cách đã chọn / Nguồn gốc | Có dùng `test`? | Trạng thái |
 | :--- | :--- | :---: | :--- | :---: | :--- |
-| Loại hàm mục tiêu & Cân bằng lớp | `c3_loss_type` $\in \{\text{'ce'}, \text{'emd'}, \text{'corn'}\}$, `c3_class_weighting` $\in \{\text{False}, \text{True}\}$ | Đang chạy chọn trên fold 0–2 | Chạy đủ 6 tổ hợp trên `fold 0–2` (Split A & B), chọn theo `Macro-F1` trung bình trên `val_select` (ưu tiên `ce > emd > corn` nếu chênh lệch $< 1\text{ std}$) | **Không** | **Chọn trực tiếp trên `val_select` fold 0–2 (Bước 3)** |
+| Loại hàm mục tiêu & Cân bằng lớp | `c3_loss_type` $\in \{\text{'ce'}, \text{'emd'}, \text{'corn'}\}$, `c3_class_weighting` $\in \{\text{False}, \text{True}\}$ | Đang chạy chọn trên fold 0–2 | Chạy đủ 6 tổ hợp trên `fold 0–2` (Split A & B), chọn theo `Macro-F1` trung bình trên `val_select` (ưu tiên `ce > emd > corn` nếu chênh lệch $< 1\text{ std}$) | **Không** | **Chọn trực tiếp trên `val_select` fold 0–2 (Giai đoạn 4)** |
 | Trọng số lớp $w_k$ | `compute_class_weights_from_train` (`losses.py`) | $w_k = \frac{N_{\text{train}}}{5\,N_{\text{train},k}}$ | Công thức nghịch đảo tần suất xác định hoàn toàn từ tập `train` (80%) của từng fold | **Không** | Tất định từ `train` |
 
 ---
@@ -68,7 +68,7 @@
 
 | Siêu tham số | Khóa trong `cfg` / vị trí code | Giá trị hiện tại | Cách đã chọn / Nguồn gốc | Có dùng `test`? | Trạng thái |
 | :--- | :--- | :---: | :--- | :---: | :--- |
-| Khoảng duyệt số cụm $[K_{\min}, K_{\max}]$ | `c5_k_min`, `c5_k_max` (`soft_labels.py`) | `[4, 12]` | Miền cụm tự nhiên cho $540\text{–}750$ thuốc; $K^*$ tự động chọn không giám sát trên `train_drugs` | **Không** | Cố định |
+| Khoảng duyệt số cụm $[K_{\min}, K_{\max}]$ | `c5_k_min`, `c5_k_max` (`soft_labels.py`) | `[4, 12]` và `[4, 24]` | Do $K^* = 12$ chạm cận trên của `[4, 12]`, bổ sung khoảng `[4, 24]` trong ablation C5 và báo cáo $K^*$ từng fold cho cả hai khoảng | **Không** | So sánh `[4, 12]` và `[4, 24]` trong ablation C5 |
 | Trọng số tiêu chí chọn $K^*$ | `0.6 * Silhouette + 0.4 * NormEigengap` (`soft_labels.py` L131) | `(0.6, 0.4)` | Chỉ dùng ma trận tương đồng trên `train_drugs` (hoàn toàn không dùng nhãn `val` hay `test`) | **Không** | Cố định |
 | Trọng số ghép các view khi phân cụm | `c5_view_weighting` (`soft_labels.py`) | `'uniform'` | Trung bình đều các Laplacian chuẩn hóa đối xứng trên `train_drugs` | **Không** | Cố định |
 | **Hệ số trộn nhãn mềm $\alpha_{\text{c5}}$** | `c5_alpha` (`experiments.py`) | `0.15` | Khởi tạo heuristic ban đầu ($0.15$), **chưa chọn trên `val_select`** | **Không** | **Sẽ tune trên `val_select` fold 0–2 (trong ngân sách $\le 6$ cấu hình)** |

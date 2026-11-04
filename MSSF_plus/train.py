@@ -445,6 +445,8 @@ def _try_restore_completed_fold(
     method_folder: str,
     fold: int,
     eval_test: bool = False,
+    cfg: Optional[dict] = None,
+    split_type: Optional[str] = None,
 ) -> Optional[dict]:
     """
     If fold outputs already exist locally or in `drive_dir`, restore them locally
@@ -476,9 +478,22 @@ def _try_restore_completed_fold(
                     shutil.copy2(drive_p, local_p)
 
     if all(os.path.exists(os.path.join(method_dir, f)) for f in req_files):
-        with open(os.path.join(method_dir, f'fold_{fold}_summary.json'), 'r', encoding='utf-8') as f:
+        sum_file = os.path.join(method_dir, f'fold_{fold}_summary.json')
+        with open(sum_file, 'r', encoding='utf-8') as f:
             summary_data = json.load(f)
         if summary_data.get('train_eval_mode', False) is True and 'best_train_macro_f1' in summary_data:
+            c5d = summary_data.get('c5_diagnostics', {})
+            if cfg is not None and split_type is not None and ('entropy_q' not in c5d or 'k_max' not in c5d):
+                fold_seed = int(cfg.get('seed', 42)) + int(fold)
+                set_global_seed(fold_seed)
+                fs = load_fold_data(fold, split_type)
+                cfg_fast = dict(cfg)
+                cfg_fast['c1_impute'] = 'zero'
+                fv = build_fold_views(fs, cfg_fast, device='cpu')
+                sr = build_soft_targets(fs, fv, cfg)
+                summary_data['c5_diagnostics'] = sr.diagnostics
+                with open(sum_file, 'w', encoding='utf-8') as f:
+                    json.dump(summary_data, f, indent=2)
             return summary_data
     return None
 
@@ -517,7 +532,7 @@ def run_experiment(
     for fold in folds:
         if resume:
             cached = _try_restore_completed_fold(
-                method_dir, drive_dir, method_folder, fold, eval_test=eval_test
+                method_dir, drive_dir, method_folder, fold, eval_test=eval_test, cfg=cfg, split_type=split_type
             )
             if cached is not None:
                 if verbose:

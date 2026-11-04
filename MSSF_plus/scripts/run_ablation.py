@@ -12,25 +12,30 @@ from MSSF_plus.protocol import DEFAULT_RESULTS_V2_DIR
 from MSSF_plus.train import run_experiment
 
 ABLATION_GROUPS: Dict[str, List[str]] = {
-    'baseline': ['MSSF_v2'],
+    'baseline': ['MSSF_v2_selfcorr'],
+    'stage3': [
+        'MSSF_v2_selfcorr',
+        'C3_ce_unweighted_ridge_selfcorr',
+    ],
     'c1': [
-        'MSSF_v2',
+        'MSSF_v2_selfcorr',
         'C1_avail_only',
         'C1_vdrop_only',
         'C1_avail_vdrop_zero',
         'C1_avail_vdrop_drop',
         'C1_avail_vdrop_mean',
+        'C1_avail_vdrop_ridge',
+        'C1_ridge_no_modulator',
+        'C1_avail_vdrop_knn',
         'C1_avail_vdrop_regress',
-        'C1_regress_no_modulator',
-        'C1_avail_vdrop_diffusion',
     ],
     'c2': [
-        'MSSF_v2',
+        'MSSF_v2_selfcorr',
         'C2_plus_ontology',
         'C2_no_profile',
     ],
     'c3': [
-        'C3_ce_unweighted',
+        'C3_ce_unweighted_ridge_selfcorr',
         'C3_ce_weighted',
         'C3_emd_unweighted',
         'C3_emd_weighted',
@@ -38,14 +43,18 @@ ABLATION_GROUPS: Dict[str, List[str]] = {
         'C3_corn_weighted',
     ],
     'c5': [
-        'MSSF_v2',
+        'MSSF_v2_selfcorr',
         'C5_knn',
         'C5_single_view',
         'C5_multi_view',
         'C5_multi_view_aux',
+        'C5_single_view_k24',
+        'C5_multi_view_k24',
+        'C5_multi_view_aux_k24',
     ],
     'loo': [
-        'MSSF_v2',
+        'MSSF_v2_selfcorr',
+        'C3_ce_unweighted_ridge_selfcorr',
         'MSSF_plus_full',
         'loo_no_C1',
         'loo_no_C2',
@@ -53,7 +62,8 @@ ABLATION_GROUPS: Dict[str, List[str]] = {
         'loo_no_C5',
     ],
     'main': [
-        'MSSF_v2',
+        'MSSF_v2_selfcorr',
+        'C3_ce_unweighted_ridge_selfcorr',
         'MSSF_plus_full',
     ],
     'stage2': [
@@ -63,16 +73,16 @@ ABLATION_GROUPS: Dict[str, List[str]] = {
         'C3_ce_unweighted_selfcorr',
     ],
     'bvi': [
-        'C3_ce_unweighted',
+        'C3_ce_unweighted_ridge_selfcorr',
         'full_no_bvi',
     ],
 }
 
 
 def get_experiments_for_group(group: str, mode: str = 'dev') -> List[str]:
-    if group == 'all':
+    if group in ('all', 'stage4'):
         seen = []
-        for g in ['baseline', 'c1', 'c2', 'c3', 'c5', 'bvi', 'loo']:
+        for g in ['c1', 'c2', 'c3', 'c5', 'bvi', 'loo']:
             for exp in ABLATION_GROUPS[g]:
                 if exp not in seen:
                     seen.append(exp)
@@ -80,11 +90,10 @@ def get_experiments_for_group(group: str, mode: str = 'dev') -> List[str]:
     elif group in ABLATION_GROUPS:
         exps = list(ABLATION_GROUPS[group])
     else:
-        raise ValueError(f"Unknown group {group!r}; choose from {list(ABLATION_GROUPS.keys()) + ['all']}")
+        raise ValueError(f"Unknown group {group!r}; choose from {list(ABLATION_GROUPS.keys()) + ['stage4', 'all']}")
 
-    # Exclude C1_avail_vdrop_diffusion from 10-fold ('full') runs per Change 1 review decision
-    if mode == 'full':
-        exps = [e for e in exps if e != 'C1_avail_vdrop_diffusion']
+    # Diffusion is excluded from all runs per Stage 2 follow-up decision
+    exps = [e for e in exps if e != 'C1_avail_vdrop_diffusion']
     return exps
 
 
@@ -94,7 +103,7 @@ def main():
         '--group',
         type=str,
         default='main',
-        choices=list(ABLATION_GROUPS.keys()) + ['all'],
+        choices=list(ABLATION_GROUPS.keys()) + ['stage4', 'all'],
         help='Ablation group to run',
     )
     parser.add_argument(

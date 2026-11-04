@@ -1,0 +1,227 @@
+# Command: MSSF_plus/.venv/bin/python -m MSSF_plus.scripts.dump_raw_verification
+# Script : MSSF_plus/scripts/dump_raw_verification.py
+# Item 2 : Views in build_fold_views (name, source file path, SHA256, shape) vs original MSSF/mssf.py
+==================================================================================================================================
+
+==================================================================================================================================
+CONFIG: MSSF_v2 | Fold=0, Split=B | c1_impute=zero | c2_se_mode=original
+drug_features_matrix shape=(750, 8250) (dtype=float32) | se_features_matrix shape=(994, 3976) (dtype=float32)
+----------------------------------------------------------------------------------------------------------------------------------
+DRUG VIEWS IN build_fold_views:
+Idx | View Name              | View Shape   | Raw Shape      | Source File Path (relative to repo)              | SHA256 of Source File                                           
+----------------------------------------------------------------------------------------------------------------------------------
+  0 | D1_stitch_one          | (750, 750)   | (750, 750)     | shared_data/mssf_750/Text_similarity_one.pkl     | 983cfba362d6a0dd67595bfc86f7a3dcec037c2bff262065213a70b7aeb3333a
+  1 | D2_stitch_two          | (750, 750)   | (750, 750)     | shared_data/mssf_750/Text_similarity_two.pkl     | f20819b39dd1b81a98af7ef2e3761a93ca57828ba8e8dbc9b974e0b5dd2fa0d5
+  2 | D3_stitch_three        | (750, 750)   | (750, 750)     | shared_data/mssf_750/Text_similarity_three.pkl   | f26c12611a714861b3d72764cd5f31fa6b9c45d7d03fc1b61fb7fa455357a8c4
+  3 | D4_stitch_four         | (750, 750)   | (750, 750)     | shared_data/mssf_750/Text_similarity_four.pkl    | 0836af52faf2c66903b532c67165b520aaf6262237e33da545da56befd81100e
+  4 | D5_stitch_five         | (750, 750)   | (750, 750)     | shared_data/mssf_750/Text_similarity_five.pkl    | c6831693b92b524077d11ff742f71fbe7f6e6078a7cebe061fdd9538ec83ac94
+  5 | D6_mol2vec_cos         | (750, 750)   | (750, 100)     | shared_data/mssf_750/drug_mol.pkl                | 61c955e75dad9f840c891ac355a70ae9df67fe1d54b94c023af5332ce16a7e83
+  6 | D7_target_cos          | (750, 750)   | (750, 847)     | shared_data/mssf_750/drug_target.pkl             | 18925bdbfe9b3939d9c61f866c25097547a3f0ddd271377673b5e21059b12324
+  7 | D8_fingerprint         | (750, 750)   | (750, 750)     | shared_data/mssf_750/fingerprint_similarity.pkl  | a92c67aa78205645eb3b9a2ca955bdab9ab17d9bdb825dc38f969bd62b92407d
+  8 | D9_profile_freq_cos    | (750, 750)   | (26425, 3)     | shared_data/splits_val/splitB_fold0_train.npy    | 9b21de62a4cc1ea27643d9c0e97043f1918bacac125776fc221b61c0e7dd68bf
+  9 | D10_profile_bin_cos    | (750, 750)   | (26425, 3)     | shared_data/splits_val/splitB_fold0_train.npy    | 9b21de62a4cc1ea27643d9c0e97043f1918bacac125776fc221b61c0e7dd68bf
+ 10 | D11_pathway_enzyme     | (750, 750)   | (750, 750)     | shared_data/mssf_750/drug_pathway_enzyme_similarity.pkl | 9a131ffcf1982ff633e0e09c7997351a380c2fa2aa51691dcb41f02439baf804
+----------------------------------------------------------------------------------------------------------------------------------
+SE VIEWS IN build_fold_views:
+Idx | View Name              | View Shape   | Raw Shape      | Source File Path (relative to repo)              | SHA256 of Source File                                           
+----------------------------------------------------------------------------------------------------------------------------------
+  0 | S1_adrecs_semantic     | (994, 994)   | (994, 994)     | shared_data/mssf_750/side_effect_semantic.pkl    | f8f5f61075200b134ab9358f6079c5cf47ae2aa4ee318b5cb063d92137152b1d
+  1 | S2_glove_cos           | (994, 994)   | (994, 300)     | shared_data/mssf_750/glove_wordEmbedding.pkl     | 38f0b921881b12ff03366fccf8f96b0e7c5b361f7d9d7fe3eafc4669d9453193
+  2 | S3_profile_freq_cos    | (994, 994)   | (26425, 3)     | shared_data/splits_val/splitB_fold0_train.npy    | 9b21de62a4cc1ea27643d9c0e97043f1918bacac125776fc221b61c0e7dd68bf
+  3 | S4_profile_bin_cos     | (994, 994)   | (26425, 3)     | shared_data/splits_val/splitB_fold0_train.npy    | 9b21de62a4cc1ea27643d9c0e97043f1918bacac125776fc221b61c0e7dd68bf
+
+==================================================================================================================================
+CONFIG: C3_ce_unweighted_ridge_selfcorr | Fold=0, Split=B | c1_impute=regress_ridge | c2_se_mode=plus_ontology
+drug_features_matrix shape=(750, 8250) (dtype=float32) | se_features_matrix shape=(994, 4970) (dtype=float32)
+----------------------------------------------------------------------------------------------------------------------------------
+DRUG VIEWS IN build_fold_views:
+Idx | View Name              | View Shape   | Raw Shape      | Source File Path (relative to repo)              | SHA256 of Source File                                           
+----------------------------------------------------------------------------------------------------------------------------------
+  0 | D1_stitch_one          | (750, 750)   | (750, 750)     | shared_data/mssf_750/Text_similarity_one.pkl     | 983cfba362d6a0dd67595bfc86f7a3dcec037c2bff262065213a70b7aeb3333a
+  1 | D2_stitch_two          | (750, 750)   | (750, 750)     | shared_data/mssf_750/Text_similarity_two.pkl     | f20819b39dd1b81a98af7ef2e3761a93ca57828ba8e8dbc9b974e0b5dd2fa0d5
+  2 | D3_stitch_three        | (750, 750)   | (750, 750)     | shared_data/mssf_750/Text_similarity_three.pkl   | f26c12611a714861b3d72764cd5f31fa6b9c45d7d03fc1b61fb7fa455357a8c4
+  3 | D4_stitch_four         | (750, 750)   | (750, 750)     | shared_data/mssf_750/Text_similarity_four.pkl    | 0836af52faf2c66903b532c67165b520aaf6262237e33da545da56befd81100e
+  4 | D5_stitch_five         | (750, 750)   | (750, 750)     | shared_data/mssf_750/Text_similarity_five.pkl    | c6831693b92b524077d11ff742f71fbe7f6e6078a7cebe061fdd9538ec83ac94
+  5 | D6_mol2vec_cos         | (750, 750)   | (750, 100)     | shared_data/mssf_750/drug_mol.pkl                | 61c955e75dad9f840c891ac355a70ae9df67fe1d54b94c023af5332ce16a7e83
+  6 | D7_target_cos          | (750, 750)   | (750, 847)     | shared_data/mssf_750/drug_target.pkl             | 18925bdbfe9b3939d9c61f866c25097547a3f0ddd271377673b5e21059b12324
+  7 | D8_fingerprint         | (750, 750)   | (750, 750)     | shared_data/mssf_750/fingerprint_similarity.pkl  | a92c67aa78205645eb3b9a2ca955bdab9ab17d9bdb825dc38f969bd62b92407d
+  8 | D9_profile_freq_cos    | (750, 750)   | (26425, 3)     | shared_data/splits_val/splitB_fold0_train.npy    | 9b21de62a4cc1ea27643d9c0e97043f1918bacac125776fc221b61c0e7dd68bf
+  9 | D10_profile_bin_cos    | (750, 750)   | (26425, 3)     | shared_data/splits_val/splitB_fold0_train.npy    | 9b21de62a4cc1ea27643d9c0e97043f1918bacac125776fc221b61c0e7dd68bf
+ 10 | D11_pathway_enzyme     | (750, 750)   | (750, 750)     | shared_data/mssf_750/drug_pathway_enzyme_similarity.pkl | 9a131ffcf1982ff633e0e09c7997351a380c2fa2aa51691dcb41f02439baf804
+----------------------------------------------------------------------------------------------------------------------------------
+SE VIEWS IN build_fold_views:
+Idx | View Name              | View Shape   | Raw Shape      | Source File Path (relative to repo)              | SHA256 of Source File                                           
+----------------------------------------------------------------------------------------------------------------------------------
+  0 | S1_adrecs_semantic     | (994, 994)   | (994, 994)     | shared_data/mssf_750/side_effect_semantic.pkl    | f8f5f61075200b134ab9358f6079c5cf47ae2aa4ee318b5cb063d92137152b1d
+  1 | S2_glove_cos           | (994, 994)   | (994, 300)     | shared_data/mssf_750/glove_wordEmbedding.pkl     | 38f0b921881b12ff03366fccf8f96b0e7c5b361f7d9d7fe3eafc4669d9453193
+  2 | S3_profile_freq_cos    | (994, 994)   | (26425, 3)     | shared_data/splits_val/splitB_fold0_train.npy    | 9b21de62a4cc1ea27643d9c0e97043f1918bacac125776fc221b61c0e7dd68bf
+  3 | S4_profile_bin_cos     | (994, 994)   | (26425, 3)     | shared_data/splits_val/splitB_fold0_train.npy    | 9b21de62a4cc1ea27643d9c0e97043f1918bacac125776fc221b61c0e7dd68bf
+  4 | S5_meddra_ontology_cos | (994, 994)   | node_label:(994, 243) | shared_data/side_effect_label_750.mat            | 9c484ae159507aa6e82716835ad04550d49cdf6669eb16929f7a3df5826377c9
+
+==================================================================================================================================
+COMPARISON WITH ORIGINAL MSSF/mssf.py (read_raw_data, L31-138):
+==================================================================================================================================
+Note 1: Original MSSF (`MSSF/Datas/`) has 757 drugs x 994 side effects, whereas the unified benchmark `shared_data/mssf_750/` filters to the 750 common drugs x 994 side effects (via `shared_data/mssf_750/drug_keep_indices_757_to_750.npy`).
+Note 2: `shared_data/mssf_750/drug_side.pkl` on disk has shape=(750, 994) and SHA256=0c4d15614502856bdd940f69d860d171193b0e2946376419a701fb7d6f5f85c5. Instead of loading the full matrix and masking test pairs like `MSSF/mssf.py` L87-99, `MSSF_plus` builds `drug_side_train` (750, 994) strictly from the 80% training split (`shared_data/splits_val/splitB_fold0_train.npy`) via `make_train_only_freq(fold_split.train)` so `val_select`, `val_calib`, and `test` are 100% excluded.
+----------------------------------------------------------------------------------------------------------------------------------
+MSSF_plus View           | MSSF_plus Source File (750 drugs)              | Original MSSF/mssf.py Source File (757 drugs)  | MSSF/Datas Raw Shape | MSSF/Datas SHA256
+----------------------------------------------------------------------------------------------------------------------------------
+D1_stitch_one            | shared_data/mssf_750/Text_similarity_one.pkl   | MSSF/Datas/Text_similarity_one.pkl             | (757, 757)           | 528c1cbaceffafacc60d9614bf1e94c44cca7ac10aeae398aa4956cdefe23dc4
+   -> Construction: direct pickle load (750, 750)
+   -> Original ref: MSSF/mssf.py L34-36, L115: Text_similarity_one.pkl -> drug_Tfeature_one
+D2_stitch_two            | shared_data/mssf_750/Text_similarity_two.pkl   | MSSF/Datas/Text_similarity_two.pkl             | (757, 757)           | 82b8a3eafaece19dd756e8480bd258aa2007eb916c43ea79fbe3d49b46b8368f
+   -> Construction: direct pickle load (750, 750)
+   -> Original ref: MSSF/mssf.py L39-41, L116: Text_similarity_two.pkl -> drug_Tfeature_two
+D3_stitch_three          | shared_data/mssf_750/Text_similarity_three.pkl | MSSF/Datas/Text_similarity_three.pkl           | (757, 757)           | 37cf170abdb2a2bfd45293dffebc7d7b0f88d069afa9f1ddb416de68bd38ff2e
+   -> Construction: direct pickle load (750, 750)
+   -> Original ref: MSSF/mssf.py L44-46, L117: Text_similarity_three.pkl -> drug_Tfeature_three
+D4_stitch_four           | shared_data/mssf_750/Text_similarity_four.pkl  | MSSF/Datas/Text_similarity_four.pkl            | (757, 757)           | 4b93492541601d92721fda05d5345adc10a0167cd0f0aca66753c21ac8cf7bcb
+   -> Construction: direct pickle load (750, 750)
+   -> Original ref: MSSF/mssf.py L49-51, L118: Text_similarity_four.pkl -> drug_Tfeature_four
+D5_stitch_five           | shared_data/mssf_750/Text_similarity_five.pkl  | MSSF/Datas/Text_similarity_five.pkl            | (757, 757)           | b49bf5025bb1470bba457409a823db85135bf1741e3837f225cfb2d574864346
+   -> Construction: direct pickle load (750, 750)
+   -> Original ref: MSSF/mssf.py L54-56, L119: Text_similarity_five.pkl -> drug_Tfeature_five
+D6_mol2vec_cos           | shared_data/mssf_750/drug_mol.pkl              | MSSF/Datas/drug_mol.pkl                        | (757, 100)           | 1fd05f5719d9c2484b66ca1b9457f0f4bde6a77eff1d7772c1a941fbe17aa5cd
+   -> Construction: cosine_similarity(drug_mol) from (750, 100) -> (750, 750)
+   -> Original ref: MSSF/mssf.py L64-67, L120: drug_mol.pkl -> cosine_similarity(Drug_word2vec)
+D7_target_cos            | shared_data/mssf_750/drug_target.pkl           | MSSF/Datas/drug_target.pkl                     | (757, 847)           | 6a9d60fa73a2d6cd804a181e517a900d3fd812bc471bde8d257e1d857a3e78b4
+   -> Construction: cosine_similarity(drug_target) from (750, 847) -> (750, 750)
+   -> Original ref: MSSF/mssf.py L76-79, L121: drug_target.pkl -> cosine_similarity(drug_target)
+D8_fingerprint           | shared_data/mssf_750/fingerprint_similarity.pkl | MSSF/Datas/fingerprint_similarity.pkl          | (757, 757)           | 476cb3e1a9e8b487b505dde6472aff2c13d476809daa4cb3b90eba9508cbcf3b
+   -> Construction: direct pickle load (750, 750)
+   -> Original ref: MSSF/mssf.py L82-84, L122: fingerprint_similarity.pkl -> drug_f_sim
+D9_profile_freq_cos      | shared_data/splits_val/splitB_fold0_train.npy  | MSSF/Datas/drug_side.pkl                       | (757, 994)           | 8f5d28b0e2a076a65af9efe05025bd1b4438bd6cbc122b25f9614dad230ac55e
+   -> Construction: cosine_similarity(drug_side_train) from train_pairs (750, 994) (+ C1 impute on missing rows)
+   -> Original ref: MSSF/mssf.py L87-101, L123: drug_side.pkl (zeroing test) -> cosine_similarity(drug_side)
+D10_profile_bin_cos      | shared_data/splits_val/splitB_fold0_train.npy  | MSSF/Datas/drug_side.pkl                       | (757, 994)           | 8f5d28b0e2a076a65af9efe05025bd1b4438bd6cbc122b25f9614dad230ac55e
+   -> Construction: cosine_similarity(drug_side_train > 0) from train_pairs (750, 994) (+ C1 impute on missing rows)
+   -> Original ref: MSSF/mssf.py L104-111, L124: (drug_side > 0) -> cosine_similarity(drug_side_label)
+D11_pathway_enzyme       | shared_data/mssf_750/drug_pathway_enzyme_similarity.pkl | MSSF/Datas/drug_pathway_enzyme_similarity.pkl  | (757, 757) (DataFrame) | 8794d0215cd4965174e5b89e1a7df14a85ae0ea9705e0c3efe4d04693096bf15
+   -> Construction: direct pickle load (750, 750)
+   -> Original ref: MSSF/mssf.py L92-94, L125: drug_pathway_enzyme_similarity.pkl -> drug_p_e_sim
+S1_adrecs_semantic       | shared_data/mssf_750/side_effect_semantic.pkl  | MSSF/Datas/side_effect_semantic.pkl            | (994, 994)           | fb3ed5d0e48554cca4229f7ec5b246802f5d9399e326b5df49158ea1f545b77d
+   -> Construction: direct pickle load (994, 994)
+   -> Original ref: MSSF/mssf.py L59-61, L132: side_effect_semantic.pkl -> effect_side_semantic
+S2_glove_cos             | shared_data/mssf_750/glove_wordEmbedding.pkl   | MSSF/Datas/glove_wordEmbedding.pkl             | (994, 300)           | f1cd6277e600f2b253f25b77ee91c28237058f5e99e2fd6a524bc2d3e31f1364
+   -> Construction: cosine_similarity(glove) from (994, 300) -> (994, 994)
+   -> Original ref: MSSF/mssf.py L70-73, L133: glove_wordEmbedding.pkl -> cosine_similarity(glove_word)
+S3_profile_freq_cos      | shared_data/splits_val/splitB_fold0_train.npy  | MSSF/Datas/drug_side.pkl                       | (757, 994)           | 8f5d28b0e2a076a65af9efe05025bd1b4438bd6cbc122b25f9614dad230ac55e
+   -> Construction: cosine_similarity(drug_side_train.T) from train_pairs (994, 750) -> (994, 994)
+   -> Original ref: MSSF/mssf.py L128, L134: cosine_similarity(drug_side.T) -> side_drug_sim
+S4_profile_bin_cos       | shared_data/splits_val/splitB_fold0_train.npy  | MSSF/Datas/drug_side.pkl                       | (757, 994)           | 8f5d28b0e2a076a65af9efe05025bd1b4438bd6cbc122b25f9614dad230ac55e
+   -> Construction: cosine_similarity((drug_side_train > 0).T) from train_pairs (994, 750) -> (994, 994)
+   -> Original ref: MSSF/mssf.py L129, L135: cosine_similarity(drug_side_label.T) -> side_drug_label_sim
+S5_meddra_ontology_cos   | shared_data/side_effect_label_750.mat          | (None - new in C2 plus_ontology)               | N/A                  | N/A
+   -> Construction: cosine_similarity(node_label) from mat['node_label'] (994, 243) -> (994, 994)
+   -> Original ref: NOT IN ORIGINAL MSSF (Added by C2 plus_ontology from shared_data/side_effect_label_750.mat)
+
+--- Verbatim excerpt of MSSF/mssf.py lines 30-139 (read_raw_data) ---
+  30: # Obtain relevant drug and side effect matrix data
+  31: def read_raw_data(rawdata_dir, data_test):
+  32: 
+  33:     # Load SMDsimilarity
+  34:     gii = open(rawdata_dir + '/' + 'Text_similarity_one.pkl', 'rb')
+  35:     drug_Tfeature_one = pickle.load(gii)
+  36:     gii.close()
+  37: 
+  38:     # Load SMDexperimental
+  39:     gii = open(rawdata_dir + '/' + 'Text_similarity_two.pkl', 'rb')
+  40:     drug_Tfeature_two = pickle.load(gii)
+  41:     gii.close()
+  42: 
+  43:     # Load SMDdatabase
+  44:     gii = open(rawdata_dir + '/' + 'Text_similarity_three.pkl', 'rb')
+  45:     drug_Tfeature_three = pickle.load(gii)
+  46:     gii.close()
+  47: 
+  48:     # Load SMDtext
+  49:     gii = open(rawdata_dir + '/' + 'Text_similarity_four.pkl', 'rb')
+  50:     drug_Tfeature_four = pickle.load(gii)
+  51:     gii.close()
+  52: 
+  53:     # Load SMDcombined
+  54:     gii = open(rawdata_dir + '/' + 'Text_similarity_five.pkl', 'rb')
+  55:     drug_Tfeature_five = pickle.load(gii)
+  56:     gii.close()
+  57: 
+  58:     # Load semantic similarity of side effects
+  59:     gii = open(rawdata_dir + '/' + 'side_effect_semantic.pkl', 'rb')
+  60:     effect_side_semantic = pickle.load(gii)
+  61:     gii.close()
+  62: 
+  63:     # Load molecular embeddings for drugs and compute cosine similarity
+  64:     gii = open(rawdata_dir + '/' + 'drug_mol.pkl', 'rb')
+  65:     Drug_word2vec = pickle.load(gii)
+  66:     gii.close()
+  67:     Drug_word_sim = cosine_similarity(Drug_word2vec)
+  68: 
+  69:     # Load GloVe word embeddings for side effects and compute cosine similarity
+  70:     gii = open(rawdata_dir + '/' + 'glove_wordEmbedding.pkl', 'rb')
+  71:     glove_word = pickle.load(gii)
+  72:     gii.close()
+  73:     side_glove_sim = cosine_similarity(glove_word)
+  74: 
+  75:     # Load drug-target information and compute cosine similarity
+  76:     gii = open(rawdata_dir + '/' + 'drug_target.pkl', 'rb')
+  77:     drug_target = pickle.load(gii)
+  78:     gii.close()
+  79:     drug_target_sim = cosine_similarity(drug_target)
+  80: 
+  81:     # Load drug fingerprint similarity
+  82:     gii = open(rawdata_dir + '/' + 'fingerprint_similarity.pkl', 'rb')
+  83:     drug_f_sim = pickle.load(gii)
+  84:     gii.close()
+  85: 
+  86:     # Load drug-side effect interaction matrix
+  87:     gii = open(rawdata_dir + '/' + 'drug_side.pkl', 'rb')
+  88:     drug_side = pickle.load(gii)
+  89:     gii.close()
+  90: 
+  91:     # Load drug-pathway-enzyme similarity matrix
+  92:     gii = open(rawdata_dir + '/' + 'drug_pathway_enzyme_similarity.pkl', 'rb')
+  93:     drug_p_e_sim = pickle.load(gii)
+  94:     gii.close()
+  95: 
+  96:     # Remove test set information from the training matrix
+  97:     for i in range(data_test.shape[0]):
+  98:         drug_side[data_test[i, 0], data_test[i, 1]] = 0
+  99: 
+ 100:     # Compute cosine similarity over the remaining drug-side effect frequency matrix, SMD_DIPF
+ 101:     drug_side_sim = cosine_similarity(drug_side)
+ 102: 
+ 103:     # Generate binary label matrix from the frequency matrix
+ 104:     drug_side_label = np.zeros((drug_side.shape[0], drug_side.shape[1]))
+ 105:     for i in range(drug_side.shape[0]):
+ 106:         for j in range(drug_side.shape[1]):
+ 107:             if drug_side[i, j] > 0:
+ 108:                 drug_side_label[i, j] = 1
+ 109: 
+ 110:     # Compute cosine similarity over the binary label matrix, SMD_DIPA
+ 111:     drug_side_label_sim = cosine_similarity(drug_side_label)
+ 112: 
+ 113:     # Assemble drug features
+ 114:     drug_features, side_features = [], []
+ 115:     drug_features.append(drug_Tfeature_one)
+ 116:     drug_features.append(drug_Tfeature_two)
+ 117:     drug_features.append(drug_Tfeature_three)
+ 118:     drug_features.append(drug_Tfeature_four)
+ 119:     drug_features.append(drug_Tfeature_five)
+ 120:     drug_features.append(Drug_word_sim)
+ 121:     drug_features.append(drug_target_sim)
+ 122:     drug_features.append(drug_f_sim)
+ 123:     drug_features.append(drug_side_sim)
+ 124:     drug_features.append(drug_side_label_sim)
+ 125:     drug_features.append(drug_p_e_sim)
+ 126: 
+ 127:     # Compute similarity matrices for side effects,SME_DIPA,SME_DIPF
+ 128:     side_drug_sim = cosine_similarity(drug_side.T)
+ 129:     side_drug_label_sim = cosine_similarity(drug_side_label.T)
+ 130: 
+ 131:     # Assemble side features
+ 132:     side_features.append(effect_side_semantic)
+ 133:     side_features.append(side_glove_sim)
+ 134:     side_features.append(side_drug_sim)
+ 135:     side_features.append(side_drug_label_sim)
+ 136: 
+ 137:     # return drug and side features
+ 138:     return drug_features, side_features

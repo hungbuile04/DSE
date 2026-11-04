@@ -147,6 +147,18 @@ def _select_k_and_cluster(
     return best_labels, best_k, best_sil, best_gap
 
 
+def _compute_soft_target_entropy(soft_targets: np.ndarray, onehot: np.ndarray) -> Tuple[float, float]:
+    """Compute mean Shannon entropy -sum_c q_c log(q_c) (in nats) across all pairs and across softened pairs."""
+    q = np.clip(soft_targets.astype(np.float64), 1e-12, 1.0)
+    ent = -np.sum(q * np.log(q), axis=1)
+    # Zero out tiny numerical floor for exact one-hot rows
+    is_soft = np.max(np.abs(soft_targets - onehot), axis=1) > 1e-6
+    ent = np.where(is_soft, ent, 0.0)
+    mean_ent_all = float(ent.mean()) if len(ent) > 0 else 0.0
+    mean_ent_soft = float(ent[is_soft].mean()) if np.any(is_soft) else 0.0
+    return mean_ent_all, mean_ent_soft
+
+
 def build_soft_targets(
     fold_split: FoldSplit,
     fold_views: FoldViews,
@@ -157,8 +169,8 @@ def build_soft_targets(
         c5_mode: 'none' | 'knn' | 'single_view' | 'multi_view' (default: 'none')
         c5_lambda: float in [0, 1] (default: 0.2)
         c5_min_samples: int minimum leave-one-out samples per (cluster, SE) (default: 3)
-        c5_k_min: int (default: 5)
-        c5_k_max: int (default: 15)
+        c5_k_min: int (default: 4)
+        c5_k_max: int (default: 12)
         c5_fixed_k: optional int (default: None)
         c5_knn_k: int (default: 10)
         c5_single_view_name: str (default: 'D5_stitch_five')
@@ -167,6 +179,8 @@ def build_soft_targets(
     mode = cfg.get('c5_mode', 'none')
     lam = float(cfg.get('c5_lambda', cfg.get('c5_alpha', 0.2)))
     min_samples = int(cfg.get('c5_min_samples', 3))
+    k_min = int(cfg.get('c5_k_min', 4))
+    k_max = int(cfg.get('c5_k_max', 12))
     seed = int(cfg.get('seed', 42)) + int(fold_split.fold)
 
     train_arr = fold_split.train
@@ -183,7 +197,17 @@ def build_soft_targets(
             soft_targets=onehot,
             drug_cluster_ids=np.full(n_train, -1, dtype=np.int64),
             n_clusters=0,
-            diagnostics={'n_clusters': 0, 'silhouette': 0.0, 'eigengap': 0.0, 'frac_smoothed': 0.0},
+            diagnostics={
+                'n_clusters': 0,
+                'k_min': 0,
+                'k_max': 0,
+                'silhouette': 0.0,
+                'eigengap': 0.0,
+                'frac_smoothed': 0.0,
+                'softened_pair_ratio': 0.0,
+                'entropy_q': 0.0,
+                'entropy_q_smoothed': 0.0,
+            },
         )
 
     train_drugs = np.asarray(fold_split.train_drugs, dtype=int)
@@ -234,12 +258,23 @@ def build_soft_targets(
             n_smoothed += 1
 
         frac_sm = float(n_smoothed / max(n_train, 1))
+        ent_all, ent_sm = _compute_soft_target_entropy(soft_targets, onehot)
         return SoftLabelResult(
             mode='knn',
             soft_targets=soft_targets,
             drug_cluster_ids=np.full(n_train, -1, dtype=np.int64),
             n_clusters=0,
-            diagnostics={'n_clusters': 0, 'silhouette': 0.0, 'eigengap': 0.0, 'frac_smoothed': frac_sm},
+            diagnostics={
+                'n_clusters': 0,
+                'k_min': 0,
+                'k_max': 0,
+                'silhouette': 0.0,
+                'eigengap': 0.0,
+                'frac_smoothed': frac_sm,
+                'softened_pair_ratio': frac_sm,
+                'entropy_q': ent_all,
+                'entropy_q_smoothed': ent_sm,
+            },
         )
 
     if mode not in ('single_view', 'multi_view'):
@@ -254,8 +289,8 @@ def build_soft_targets(
     )
     cluster_labels_local, best_k, best_sil, best_gap = _select_k_and_cluster(
         affinity,
-        k_min=int(cfg.get('c5_k_min', 5)),
-        k_max=int(cfg.get('c5_k_max', 15)),
+        k_min=k_min,
+        k_max=k_max,
         fixed_k=cfg.get('c5_fixed_k', None),
         seed=seed,
     )
@@ -288,6 +323,7 @@ def build_soft_targets(
             n_smoothed += 1
 
     frac_sm = float(n_smoothed / max(n_train, 1))
+    ent_all, ent_sm = _compute_soft_target_entropy(soft_targets, onehot)
     return SoftLabelResult(
         mode=mode,
         soft_targets=soft_targets,
@@ -295,8 +331,13 @@ def build_soft_targets(
         n_clusters=int(best_k),
         diagnostics={
             'n_clusters': int(best_k),
+            'k_min': int(k_min),
+            'k_max': int(k_max),
             'silhouette': float(best_sil),
             'eigengap': float(best_gap),
             'frac_smoothed': frac_sm,
+            'softened_pair_ratio': frac_sm,
+            'entropy_q': ent_all,
+            'entropy_q_smoothed': ent_sm,
         },
     )

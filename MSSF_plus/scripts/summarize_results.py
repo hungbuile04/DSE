@@ -6,10 +6,12 @@ prediction metrics (including per-drug coverage mean, std, and <80% rate in Spli
 """
 
 import os
+import sys
 import glob
 import json
+import shutil
 import argparse
-from typing import Dict
+from typing import Dict, List, Optional
 
 import numpy as np
 
@@ -18,12 +20,44 @@ from MSSF_plus.metrics import compute_multiclass_metrics, aggregate_fold_metrics
 from MSSF_plus.conformal import evaluate_all_conformal_methods
 
 
+def _sync_from_drive_if_available(
+    results_dir: str,
+    drive_dir: Optional[str],
+    split_type: str,
+    only_methods: Optional[List[str]] = None,
+) -> None:
+    """Copy completed fold files from drive_dir/*_{split_type} into results_dir if missing locally."""
+    if not drive_dir or not os.path.isdir(drive_dir):
+        return
+    pattern = os.path.join(drive_dir, f'*_{split_type}')
+    for src_mdir in sorted(glob.glob(pattern)):
+        if not os.path.isdir(src_mdir):
+            continue
+        folder_name = os.path.basename(src_mdir)
+        suffix = f'_{split_type}'
+        if not folder_name.endswith(suffix):
+            continue
+        m_name = folder_name[:-len(suffix)]
+        if only_methods is not None and m_name not in only_methods:
+            continue
+        dst_mdir = os.path.join(results_dir, folder_name)
+        os.makedirs(dst_mdir, exist_ok=True)
+        for fname in os.listdir(src_mdir):
+            sp = os.path.join(src_mdir, fname)
+            dp = os.path.join(dst_mdir, fname)
+            if os.path.isfile(sp) and not os.path.exists(dp):
+                shutil.copy2(sp, dp)
+
+
 def collect_method_results(
     results_dir: str,
     split_type: str,
     only_folds: list = None,
+    only_methods: Optional[List[str]] = None,
+    drive_dir: Optional[str] = None,
 ) -> Dict[str, dict]:
     """Scan `results_dir/*_{split_type}` and evaluate all available folds directly from saved `.npy` files."""
+    _sync_from_drive_if_available(results_dir, drive_dir, split_type, only_methods=only_methods)
     pattern = os.path.join(results_dir, f'*_{split_type}')
     method_dirs = sorted(glob.glob(pattern))
     collected = {}
@@ -39,11 +73,14 @@ def collect_method_results(
         # Exclude any deprecated softquant folders if present on disk
         if 'softquant' in method_name.lower():
             continue
+        if only_methods is not None and method_name not in only_methods:
+            continue
 
         fold_metrics_list = []
         fold_valsel_list = []
         fold_gaps = []
         fold_times = []
+        fold_c5_list = []
         fold_conformal_list = {k: [] for k in ['LAC', 'APS', 'Ordinal_LAC', 'Ordinal_APS']}
         fold_valsel_conformal_list = {k: [] for k in ['LAC', 'APS', 'Ordinal_LAC', 'Ordinal_APS']}
         folds_found = []
@@ -112,6 +149,10 @@ def collect_method_results(
                     fold_gaps.append(float(s_json['train_valsel_macro_f1_gap']))
                 if 'elapsed_seconds' in s_json:
                     fold_times.append(float(s_json['elapsed_seconds']))
+                if 'c5_diagnostics' in s_json and isinstance(s_json['c5_diagnostics'], dict):
+                    c5d = dict(s_json['c5_diagnostics'])
+                    c5d['fold'] = k
+                    fold_c5_list.append(c5d)
 
             if os.path.exists(vcal_lbl_path) and os.path.exists(vcal_prb_path):
                 vcal_c = np.load(vcal_lbl_path).flatten()
@@ -180,6 +221,7 @@ def collect_method_results(
             'valsel': valsel_agg,
             'conformal': agg_c4,
             'valsel_conformal': agg_valsel_c4,
+            'c5_per_fold': fold_c5_list,
             'gap_mean': float(np.mean(fold_gaps)) if fold_gaps else float('nan'),
             'gap_std': float(np.std(fold_gaps)) if fold_gaps else float('nan'),
             'fold_gaps': fold_gaps,
@@ -309,43 +351,70 @@ def format_markdown_tables(
     # 3. C4 Conformal table (with per-drug coverage statistics per Change 4)
     c4_key = 'valsel_conformal' if eval_target == 'valsel' else 'conformal'
     has_any_c4 = any(bool(data.get(c4_key)) for data in collected.values())
-    if not has_any_c4:
-        lines.append("")
-        return "\n".join(lines)
-
-    lines.append(f"\n### 3. C4 Ordinal Conformal Prediction ($\\alpha = 0.10$, Target Coverage = 90%, {target_label})")
-    if split_type == 'B':
-        lines.append(
-            "> **Ghi chú (Split B)**: Ở Split B, `val_calib` được chia theo thuốc nên đảm bảo độ phủ "
-            "(coverage) mang tính trung bình trên thuốc; các cặp tương tác trong cùng một thuốc có tương quan.\n"
-        )
-    lines.append(
-        "| Method | C4 Variant | Pair Coverage | Drug Cov (Mean ± Std) | Drug Cov < 80% | Avg Set Size | Singleton Rate | Contiguity | Cov_c0 | Cov_c1 | Cov_c2 | Cov_c3 | Cov_c4 |"
-    )
-    lines.append("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
-    for m_name, data in sorted(collected.items()):
-        c4_dict = data.get(c4_key, {})
-        for c4_name in ['LAC', 'APS', 'Ordinal_LAC', 'Ordinal_APS']:
-            if c4_name not in c4_dict:
-                continue
-            cm = c4_dict[c4_name]['mean']
-            cs = c4_dict[c4_name]['std']
-            dc_m = cm.get('drug_coverage_mean', float('nan'))
-            dc_s = cm.get('drug_coverage_std', float('nan'))
-            dc_lt80 = cm.get('drug_coverage_lt80_rate', float('nan'))
-            dc_cell = f"{dc_m:.4f} ± {dc_s:.4f}" if not np.isnan(dc_m) else "N/A"
-            lt80_cell = f"{dc_lt80:.4f} ± {cs.get('drug_coverage_lt80_rate', 0.0):.4f}" if not np.isnan(dc_lt80) else "N/A"
+    if has_any_c4:
+        lines.append(f"\n### 3. C4 Ordinal Conformal Prediction ($\\alpha = 0.10$, Target Coverage = 90%, {target_label})")
+        if split_type == 'B':
             lines.append(
-                f"| `{m_name}` | `{c4_name}` | "
-                f"{cm['empirical_coverage']:.4f} ± {cs['empirical_coverage']:.4f} | "
-                f"{dc_cell} | {lt80_cell} | "
-                f"{cm['avg_set_size']:.3f} ± {cs['avg_set_size']:.3f} | "
-                f"{cm['singleton_rate']:.4f} ± {cs['singleton_rate']:.4f} | "
-                f"{cm['contiguity_rate']:.4f} | "
-                f"{cm['coverage_c0']:.4f} | {cm['coverage_c1']:.4f} | "
-                f"{cm['coverage_c2']:.4f} | {cm['coverage_c3']:.4f} | "
-                f"{cm['coverage_c4']:.4f} |"
+                "> **Ghi chú (Split B)**: Ở Split B, `val_calib` được chia theo thuốc nên đảm bảo độ phủ "
+                "(coverage) mang tính trung bình trên thuốc; các cặp tương tác trong cùng một thuốc có tương quan.\n"
             )
+        lines.append(
+            "| Method | C4 Variant | Pair Coverage | Drug Cov (Mean ± Std) | Drug Cov < 80% | Avg Set Size | Singleton Rate | Contiguity | Cov_c0 | Cov_c1 | Cov_c2 | Cov_c3 | Cov_c4 |"
+        )
+        lines.append("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
+        for m_name, data in sorted(collected.items()):
+            c4_dict = data.get(c4_key, {})
+            for c4_name in ['LAC', 'APS', 'Ordinal_LAC', 'Ordinal_APS']:
+                if c4_name not in c4_dict:
+                    continue
+                cm = c4_dict[c4_name]['mean']
+                cs = c4_dict[c4_name]['std']
+                dc_m = cm.get('drug_coverage_mean', float('nan'))
+                dc_s = cm.get('drug_coverage_std', float('nan'))
+                dc_lt80 = cm.get('drug_coverage_lt80_rate', float('nan'))
+                dc_cell = f"{dc_m:.4f} ± {dc_s:.4f}" if not np.isnan(dc_m) else "N/A"
+                lt80_cell = f"{dc_lt80:.4f} ± {cs.get('drug_coverage_lt80_rate', 0.0):.4f}" if not np.isnan(dc_lt80) else "N/A"
+                lines.append(
+                    f"| `{m_name}` | `{c4_name}` | "
+                    f"{cm['empirical_coverage']:.4f} ± {cs['empirical_coverage']:.4f} | "
+                    f"{dc_cell} | {lt80_cell} | "
+                    f"{cm['avg_set_size']:.3f} ± {cs['avg_set_size']:.3f} | "
+                    f"{cm['singleton_rate']:.4f} ± {cs['singleton_rate']:.4f} | "
+                    f"{cm['contiguity_rate']:.4f} | "
+                    f"{cm['coverage_c0']:.4f} | {cm['coverage_c1']:.4f} | "
+                    f"{cm['coverage_c2']:.4f} | {cm['coverage_c3']:.4f} | "
+                    f"{cm['coverage_c4']:.4f} |"
+                )
+
+    # 4. C5 Soft-Label Diagnostics table (K*, softened pair ratio, entropy of q)
+    has_any_c5 = any(
+        any((d.get('n_clusters', 0) > 0 or d.get('frac_smoothed', 0.0) > 0.0) for d in data.get('c5_per_fold', []))
+        for data in collected.values()
+    )
+    if has_any_c5:
+        lines.append("\n### 4. C5 Soft-Label Diagnostics (`K*`, Softened Pair Ratio, and Entropy of `q`)")
+        lines.append("| Method | Fold | K_range | K* (`n_clusters`) | Silhouette | Eigengap | Softened Pair Ratio (`frac_smoothed`) | Entropy `H(q)` (all) | Entropy `H(q)` (softened) |")
+        lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|")
+        for m_name, data in sorted(collected.items()):
+            c5_list = data.get('c5_per_fold', [])
+            if not any((d.get('n_clusters', 0) > 0 or d.get('frac_smoothed', 0.0) > 0.0) for d in c5_list):
+                continue
+            for d in c5_list:
+                f_idx = d.get('fold', -1)
+                k_min = d.get('k_min', 0)
+                k_max = d.get('k_max', 0)
+                k_rng = f"[{k_min}, {k_max}]" if k_max > 0 else "N/A"
+                k_star = int(d.get('n_clusters', 0))
+                sil = float(d.get('silhouette', 0.0))
+                eg = float(d.get('eigengap', 0.0))
+                frac = float(d.get('frac_smoothed', d.get('softened_pair_ratio', 0.0)))
+                ent_all = d.get('entropy_q', None)
+                ent_sm = d.get('entropy_q_smoothed', None)
+                ent_all_s = f"{float(ent_all):.4f}" if ent_all is not None else "N/A"
+                ent_sm_s = f"{float(ent_sm):.4f}" if ent_sm is not None else "N/A"
+                lines.append(
+                    f"| `{m_name}` | {f_idx} | {k_rng} | {k_star} | {sil:.4f} | {eg:.4f} | {frac:.4f} ({frac*100:.2f}%) | {ent_all_s} | {ent_sm_s} |"
+                )
 
     lines.append("")
     return "\n".join(lines)
@@ -354,15 +423,32 @@ def format_markdown_tables(
 def main():
     parser = argparse.ArgumentParser(description='Summarize results_v2 experiments directly from saved .npy files.')
     parser.add_argument('--results_dir', type=str, default=DEFAULT_RESULTS_V2_DIR)
+    parser.add_argument('--drive_dir', type=str, default=None, help='Optional Google Drive directory to sync from')
     parser.add_argument('--ref_method', type=str, default='MSSF_v2')
     parser.add_argument('--eval_target', type=str, default='test', choices=['test', 'valsel'])
+    parser.add_argument('--splits', type=str, nargs='+', default=['A', 'B'], choices=['A', 'B'])
     parser.add_argument('--folds', type=int, nargs='*', default=None, help='Optional subset of folds for paired comparison')
+    parser.add_argument('--methods', type=str, nargs='*', default=None, help='Optional list of method names to include')
     parser.add_argument('--out_md', type=str, default=None)
+    parser.add_argument('--out_raw', type=str, default=None, help='Save verbatim script output to reports/raw/*.txt')
     args = parser.parse_args()
 
-    sections = ["# MSSF_plus Unified Evaluation Summary (Computed from `.npy`)\n"]
-    for split_type in ['A', 'B']:
-        collected = collect_method_results(args.results_dir, split_type, only_folds=args.folds)
+    cmd_str = "python -m MSSF_plus.scripts.summarize_results " + " ".join(sys.argv[1:])
+    header_lines = [
+        f"SCRIPT: MSSF_plus/scripts/summarize_results.py",
+        f"COMMAND: {cmd_str}",
+        "=" * 110,
+        "# MSSF_plus Unified Evaluation Summary (Computed from `.npy`)\n",
+    ]
+    sections = ["\n".join(header_lines)]
+    for split_type in args.splits:
+        collected = collect_method_results(
+            args.results_dir,
+            split_type,
+            only_folds=args.folds,
+            only_methods=args.methods,
+            drive_dir=args.drive_dir,
+        )
         sections.append(
             format_markdown_tables(
                 args.results_dir,
@@ -381,6 +467,12 @@ def main():
         with open(args.out_md, 'w', encoding='utf-8') as f:
             f.write(full_report)
         print(f"Saved Markdown report to {args.out_md}")
+
+    if args.out_raw:
+        os.makedirs(os.path.dirname(os.path.abspath(args.out_raw)), exist_ok=True)
+        with open(args.out_raw, 'w', encoding='utf-8') as f:
+            f.write(full_report + "\n")
+        print(f"Saved verbatim raw output to {args.out_raw}")
 
 
 if __name__ == '__main__':

@@ -54,9 +54,9 @@ BASE_CONFIG: Dict[str, object] = {
     'c5_single_view_name': 'D5_stitch_five',
     'c5_view_weighting': 'uniform', # 'uniform' | 'quality'
     'c5_aux_cluster_weight': 0.0,
-    # Stage 1, 2 & 4 flags (defaults preserve exact legacy behavior)
+    # Stage 1, 2, 3 & 4 flags (profile_self_correction=True is the approved default from Stage 3 onward)
     'use_factored_crossprod': True,
-    'profile_self_correction': False,
+    'profile_self_correction': True,
     'use_bvi': True,
 }
 
@@ -88,10 +88,10 @@ _STAGE2_MLP_NON_C3_KWARGS: Dict[str, object] = {
 
 
 EXPERIMENTS: Dict[str, Dict[str, object]] = {
-    # 0. Leak-free baseline
-    'MSSF_v2': _make_cfg('MSSF_v2'),
+    # 0. Leak-free baseline (Stage 2 non-selfcorr preserved as False; Stage 3+ reference is MSSF_v2_selfcorr)
+    'MSSF_v2': _make_cfg('MSSF_v2', profile_self_correction=False),
 
-    # 1. C1 — Missing View Handling & Cross-Fitted Cold-Start Imputation
+    # 1. C1 — Missing View Handling & Cross-Fitted Cold-Start Imputation (profile_self_correction=True)
     'C1_avail_only': _make_cfg(
         'C1_avail_only',
         c1_use_availability=True,
@@ -162,7 +162,7 @@ EXPERIMENTS: Dict[str, Dict[str, object]] = {
         c1_impute='diffusion',
     ),
 
-    # 2. C2 — SE MedDRA Ontology View
+    # 2. C2 — SE MedDRA Ontology View (profile_self_correction=True)
     'C2_plus_ontology': _make_cfg(
         'C2_plus_ontology',
         c2_se_mode='plus_ontology',
@@ -173,14 +173,15 @@ EXPERIMENTS: Dict[str, Dict[str, object]] = {
     ),
 
     # 3. C3 — Ordinal Objective Selection ({ce, emd, corn} x {unweighted, weighted})
-    # Note: C3_ce_unweighted and C3_ce_unweighted_selfcorr retain _STAGE2_MLP_NON_C3_KWARGS
-    # to preserve their Stage 2 folders on disk, while C3_ce_unweighted_ridge(_selfcorr) and
-    # all other C3 configs use _FULL_NON_C3_KWARGS (c1_impute='regress_ridge').
+    # Note: C3_ce_unweighted retains _STAGE2_MLP_NON_C3_KWARGS + profile_self_correction=False
+    # to preserve Stage 2 folders on disk; C3_ce_unweighted_ridge_selfcorr and the remaining
+    # C3 configs use _FULL_NON_C3_KWARGS (c1_impute='regress_ridge') + profile_self_correction=True.
     'C3_ce_unweighted': _make_cfg(
         'C3_ce_unweighted',
         **_STAGE2_MLP_NON_C3_KWARGS,
         c3_loss_type='ce',
         c3_class_weighting=False,
+        profile_self_correction=False,
     ),
     'C3_ce_weighted': _make_cfg(
         'C3_ce_weighted',
@@ -213,7 +214,7 @@ EXPERIMENTS: Dict[str, Dict[str, object]] = {
         c3_class_weighting=True,
     ),
 
-    # 4. C5 — Soft Label Generation
+    # 4. C5 — Soft Label Generation (both K in [4, 12] and K in [4, 24], profile_self_correction=True)
     'C5_knn': _make_cfg(
         'C5_knn',
         c5_mode='knn',
@@ -223,21 +224,50 @@ EXPERIMENTS: Dict[str, Dict[str, object]] = {
         'C5_single_view',
         c5_mode='single_view',
         c5_alpha=0.15,
+        c5_k_min=4,
+        c5_k_max=12,
     ),
     'C5_multi_view': _make_cfg(
         'C5_multi_view',
         c5_mode='multi_view',
         c5_alpha=0.15,
+        c5_k_min=4,
+        c5_k_max=12,
         c5_aux_cluster_weight=0.0,
     ),
     'C5_multi_view_aux': _make_cfg(
         'C5_multi_view_aux',
         c5_mode='multi_view',
         c5_alpha=0.15,
+        c5_k_min=4,
+        c5_k_max=12,
+        c5_aux_cluster_weight=0.05,
+    ),
+    'C5_single_view_k24': _make_cfg(
+        'C5_single_view_k24',
+        c5_mode='single_view',
+        c5_alpha=0.15,
+        c5_k_min=4,
+        c5_k_max=24,
+    ),
+    'C5_multi_view_k24': _make_cfg(
+        'C5_multi_view_k24',
+        c5_mode='multi_view',
+        c5_alpha=0.15,
+        c5_k_min=4,
+        c5_k_max=24,
+        c5_aux_cluster_weight=0.0,
+    ),
+    'C5_multi_view_aux_k24': _make_cfg(
+        'C5_multi_view_aux_k24',
+        c5_mode='multi_view',
+        c5_alpha=0.15,
+        c5_k_min=4,
+        c5_k_max=24,
         c5_aux_cluster_weight=0.05,
     ),
 
-    # 5. Full MSSF_plus Model & Leave-One-Out (LOO) Ablations (default C1 = regress_ridge)
+    # 5. Full MSSF_plus Model & Leave-One-Out (LOO) Ablations (default C1 = regress_ridge, profile_self_correction=True)
     'MSSF_plus_full': _make_cfg(
         'MSSF_plus_full',
         c1_use_availability=True,
@@ -305,7 +335,7 @@ EXPERIMENTS: Dict[str, Dict[str, object]] = {
         c3_class_weighting=False,
         use_bvi=False,
     ),
-    # Stage 2: Profile self-correction comparison configurations
+    # Stage 2 & Stage 3: Profile self-correction comparison & reference configurations
     'MSSF_v2_selfcorr': _make_cfg(
         'MSSF_v2_selfcorr',
         profile_self_correction=True,

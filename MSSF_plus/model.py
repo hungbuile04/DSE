@@ -359,7 +359,7 @@ class MSSFPlusModel(nn.Module):
             self.profile_se_view_indices = [2, 3] if self.n_se_views >= 4 else []
         self.n_clusters = int(n_clusters)
 
-        dropout = float(cfg.get('dropout', 0.3))
+        dropout = float(cfg.get('dropout', 0.4))
         gp_dim = int(cfg.get('gp', 64))
         loss_type = cfg.get('c3_loss_type', 'ce')
         out_classes = 4 if loss_type == 'corn' else 5

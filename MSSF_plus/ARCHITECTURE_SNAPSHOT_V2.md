@@ -115,7 +115,7 @@ Mô hình vận hành trên hệ thống gồm **11 Drug Views** và **5 SE View
 
 ### 4.5. C5 — Nhãn mềm Cụm phổ Đa khung nhìn Không rò rỉ (`MSSF_plus/soft_labels.py`)
 - Xây dựng đồ thị tương đồng đồng thuận từ các drug view chỉ trên `train_drugs`.
-- Tự động chọn số cụm tối ưu $K^* \in [4, 12]$ cực đại hóa $\text{Score}(K) = 0.6\,\text{Silhouette} + 0.4\,\text{Eigengap}$.
+- Tự động chọn số cụm tối ưu $K^* \in [4, 12]$ (và bổ sung khoảng $[4, 24]$ trong ablation C5 do $K^*=12$ chạm cận trên của $[4, 12]$) cực đại hóa $\text{Score}(K) = 0.6\,\text{Silhouette} + 0.4\,\text{Eigengap}$.
 - Sinh nhãn mềm Leave-One-Out nghiêm ngặt ($d' \neq d$):
   $$q_{d,s} = (1 - \alpha_{\text{c5}})\,\mathbf{e}_y + \alpha_{\text{c5}}\,P_{c,s}^{(-d)}, \qquad \alpha_{\text{c5}} = 0.15$$
 - Nhánh phụ `aux_cluster_head` mặc định **TẮT** (`c5_aux_cluster_weight = 0.0`) trong mô hình chính.
@@ -179,7 +179,7 @@ Mạng `MSSFPlusModel` kế thừa cấu trúc 3 nhánh mã hóa nhưng được
 | `classifier` | `Classifier` | 2,245 | 2,245 | 0.02% |
 | **Tổng (`MSSFPlusModel`)** | `MSSFPlusModel` | **10,097,399** | **10,754,421** | **100.00%** |
 
-*(Lưu ý: ở giai đoạn tiền xử lý C1 của `C3_ce_unweighted`, mỗi mạng `ProfileViewRegressor` có `2,182,876` tham số, được huấn luyện độc lập trước khi khởi tạo `MSSFPlusModel`).*
+*(Lưu ý: ở cấu hình dẫn đầu `C3_ce_unweighted_ridge_selfcorr`, bộ bù khuyết mặc định C1 là `regress_ridge` giải hệ tuyến tính chuẩn hóa L2 có 0 tham số mạng thần kinh phụ; `ProfileViewRegressor` MLP `2,182,876` tham số chỉ giữ làm 1 dòng đối chứng trong bảng ablation C1).*
 
 ### Công thức Tối ưu hóa Đại số cho Khối `CrossProduction` (`MSSF_plus/model.py` L236–279)
 - **Vấn đề bản cũ**: Sau khi khối `Preprocess` chiếu từng drug view (`750 -> 128`) và từng SE view (`994 -> 128`), bản gốc tính tích ngoài từng cặp $e_d^{(v)} \otimes e_s^{(u)}$ sinh ra tensor 4 chiều kích thước $(B,\; V_d \times V_s,\; 128,\; 128)$ — tức $(B, 44, 128, 128)$ ở `MSSF_v2` ($V_d=11, V_s=4$) hoặc $(B, 55, 128, 128)$ ở `MSSF_plus` ($V_d=11, V_s=5$), ngốn $\sim 1.84\text{ GB}$ VRAM mỗi batch ($B=512$) và làm nghẽn cổ chai bộ nhớ GPU/CPU.
@@ -203,19 +203,20 @@ Bảng giá trị đọc trực tiếp từ [`ARCHITECTURE_DUMP.md`](file:///Use
 | `eval_batch_size` | `512` | Kích thước batch khi suy luận / đánh giá |
 | `lr` | `0.0001` ($10^{-4}$) | Tốc độ học (`Adam` optimizer, khớp `MSSF` gốc) |
 | `weight_decay` | `1e-05` ($10^{-5}$) | Hệ số suy giảm trọng số L2 (khớp `MSSF` gốc) |
-| `dropout` | `0.4` | Dropout trong các khối `EncoderConnection`, `EncoderAddition`, `Preprocess`, `Classifier` |
+| `dropout` | `0.4` | Dropout trong các khối `EncoderConnection`, `EncoderAddition`, `Preprocess`, `Classifier` (`Dropout(p=0.4, inplace=False)` trong `print(model)`) |
 | `gp` (latent dim) | `64` | Chiều không gian tiềm ẩn BVI ($z \sim \mathcal{N}(\mu, \sigma^2)$) |
 | `kl_weight`, `rec_con_weight`, `rec_add_weight` | `0.001`, `0.0001`, `0.0001` | Trọng số 3 loss phụ kế thừa từ `MSSF/mssf.py` |
 | `c1_view_dropout_prob` | `0.25` | Xác suất che view profile khi huấn luyện |
-| `c1_impute` | `'regress'` | Phương pháp bù khuyết chính thức (`ProfileViewRegressor`, Cross-fitting $K=5$) |
-| `c1_imputer_epochs` | `80` | Số epoch huấn luyện `ProfileViewRegressor` |
+| `c1_impute` | `'regress_ridge'` | Phương pháp bù khuyết chính thức (Ridge Regression, Cross-fitting $K=5$; `regress` MLP giữ làm 1 dòng ablation) |
+| `c1_imputer_epochs` | `80` | Số epoch huấn luyện `ProfileViewRegressor` (chỉ dùng cho dòng ablation MLP) |
 | `c2_se_mode` | `'plus_ontology'` | Kích hoạt view MedDRA $S_5$ ($V_s = 5$) |
 | `c4_alpha` | `0.1` | Mức ý nghĩa Conformal Prediction (độ phủ mục tiêu $90\%$) |
 | `c5_mode` | `'multi_view'` | Phân cụm phổ đa khung nhìn sinh nhãn mềm |
+| `c5_k_min`, `c5_k_max` | `4`, `12` (và `4`, `24` trong ablation C5) | Khoảng duyệt số cụm phổ tự động $K^*$ |
 | `c5_alpha` | `0.15` | Hệ số trộn nhãn mềm cụm ($q = 0.85\,\mathbf{e}_y + 0.15\,P_{\text{cluster}}^{(-d)}$) |
 | `c5_aux_cluster_weight`| `0.0` | Mặc định tắt cluster head phụ trong mô hình chính |
 | `use_factored_crossprod` | `True` | Bật phân rã đại số chính xác cho `CrossProduction` |
-| `profile_self_correction` | `False` (hoặc `True` ở bản `_selfcorr`) | Cờ khử đóng góp của chính cặp đang train trên `D9, D10, S3, S4` |
+| `profile_self_correction` | `True` (mặc định từ Giai đoạn 3–6) | Cờ khử đóng góp của chính cặp đang train trên `D9, D10, S3, S4` |
 | `use_bvi` | `True` | Bật `GaussianParametrizer` (`False` ở biến thể ablation `full_no_bvi`) |
 
 ---

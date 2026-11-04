@@ -1,0 +1,130 @@
+# Command: MSSF_plus/.venv/bin/python -m MSSF_plus.scripts.dump_raw_verification
+# Script : MSSF_plus/scripts/dump_raw_verification.py
+# Item 4 : Classification head inspection (5-class vs 1-D output) and exact source code lines
+==============================================================================================================
+Model: MSSF_v2
+  cfg['c3_loss_type']           : 'ce'
+  model.classifier.classes      : 5
+  print(model.classifier)       :
+Classifier(
+  (reluDrop): Sequential(
+    (0): LeakyReLU(negative_slope=0.01)
+    (1): Dropout(p=0.4, inplace=False)
+  )
+  (classifier): Sequential(
+    (0): Linear(in_features=64, out_features=32, bias=True)
+    (1): Sequential(
+      (0): LeakyReLU(negative_slope=0.01)
+      (1): Dropout(p=0.4, inplace=False)
+    )
+    (2): Linear(in_features=32, out_features=5, bias=True)
+  )
+)
+  Final layer (`model.classifier.classifier[2]`): Linear(in_features=32, out_features=5, bias=True) | in_features=32, out_features=5, weight.shape=(5, 32), bias.shape=(5,), params=165
+  Total `model.classifier` params: 2245 (Linear(64, 32)=2080 + Linear(32, 5)=165)
+--------------------------------------------------------------------------------------------------------------
+Model: C3_ce_unweighted_ridge_selfcorr
+  cfg['c3_loss_type']           : 'ce'
+  model.classifier.classes      : 5
+  print(model.classifier)       :
+Classifier(
+  (reluDrop): Sequential(
+    (0): LeakyReLU(negative_slope=0.01)
+    (1): Dropout(p=0.4, inplace=False)
+  )
+  (classifier): Sequential(
+    (0): Linear(in_features=64, out_features=32, bias=True)
+    (1): Sequential(
+      (0): LeakyReLU(negative_slope=0.01)
+      (1): Dropout(p=0.4, inplace=False)
+    )
+    (2): Linear(in_features=32, out_features=5, bias=True)
+  )
+)
+  Final layer (`model.classifier.classifier[2]`): Linear(in_features=32, out_features=5, bias=True) | in_features=32, out_features=5, weight.shape=(5, 32), bias.shape=(5,), params=165
+  Total `model.classifier` params: 2245 (Linear(64, 32)=2080 + Linear(32, 5)=165)
+--------------------------------------------------------------------------------------------------------------
+
+--- Verbatim code from MSSF_plus/model.py lines 290-304 (class Classifier) ---
+ 290: class Classifier(nn.Module):
+ 291:     def __init__(self, latent_dim: int, classes: int, dropout: float):
+ 292:         super().__init__()
+ 293:         self.latent_dim = latent_dim
+ 294:         self.classes = classes
+ 295:         self.reluDrop = nn.Sequential(nn.LeakyReLU(0.01), nn.Dropout(dropout))
+ 296:         self.classifier = nn.Sequential(
+ 297:             nn.Linear(self.latent_dim, self.latent_dim // 2),
+ 298:             self.reluDrop,
+ 299:             nn.Linear(self.latent_dim // 2, self.classes),
+ 300:         )
+ 301: 
+ 302:     def forward(self, x: torch.Tensor) -> torch.Tensor:
+ 303:         return self.classifier(x)
+ 304: 
+
+--- Verbatim code from MSSF_plus/model.py lines 362-366 & 445-446 (out_classes & self.classifier) ---
+ 362:         dropout = float(cfg.get('dropout', 0.3))
+ 363:         gp_dim = int(cfg.get('gp', 64))
+ 364:         loss_type = cfg.get('c3_loss_type', 'ce')
+ 365:         out_classes = 4 if loss_type == 'corn' else 5
+ 366: 
+...
+ 445:         self.classifier = Classifier(latent_dim=gp_dim, classes=out_classes, dropout=dropout)
+ 446: 
+
+--- Verbatim code from MSSF_plus/model.py lines 612-620 (forward output) ---
+ 612:         logits = self.classifier(latent_features)
+ 613: 
+ 614:         cluster_logits = (
+ 615:             self.aux_cluster_head(latent_features)
+ 616:             if self.aux_cluster_head is not None
+ 617:             else None
+ 618:         )
+ 619: 
+ 620:         return logits, rec_con, rec_add, mu, logvar, mod_drugs, mod_sides, cluster_logits
+
+--- Verbatim code from original MSSF/model.py lines 350-393 (Classifier & Mulmodel.__init__) ---
+ 350: # Classification module
+ 351: class Classifier(nn.Module):
+ 352:     def __init__(self,latent_dim,classes,args):
+ 353:         super(Classifier,self).__init__()
+ 354: 
+ 355:         # parameters
+ 356:         self.latent_dim = latent_dim
+ 357:         self.classes = classes
+ 358: 
+ 359:         # activation and dropout block
+ 360:         self.reluDrop = nn.Sequential(nn.LeakyReLU(0.01),nn.Dropout(args.dropout))
+ 361: 
+ 362:         # Define the classification head (MLP)
+ 363:         self.classifier=nn.Sequential(
+ 364:             nn.Linear(self.latent_dim,self.latent_dim//2),
+ 365:             self.reluDrop,
+ 366: 
+ 367:             nn.Linear(self.latent_dim//2,self.classes),
+ 368:         )
+ 369: 
+ 370: 
+ 371:     def forward(self,x):
+ 372:         x = self.classifier(x) # classification
+ 373:         return x
+ 374: 
+ 375: 
+ 376: # MSSF
+ 377: class Mulmodel(nn.Module):
+ 378:     def __init__(self,args):
+ 379:         super(Mulmodel,self).__init__()
+ 380: 
+ 381:         self.args=args
+ 382:         self.feature_nums = 4*11  # Number of pairwise cross features
+ 383:         self.encoderConnection = EncoderConnection(drugs_inputdim=757*11,sides_inputdim=994*4,latent_dim=256,feature_dim=128,heads=4,args=args) # Encoder with concatenation strategy
+ 384:         self.encoderAddition = EncoderAddition(drugs_inputdim=757,sides_inputdim=994,latent_dim=256,feature_dim=128,heads = 4,args=args) # Encoder with addition strategy
+ 385:         self.preprocess = Preprocess(drug_inputdim=757,side_inputdim=994,embeddim=128,args=args)       # Preprocess each features of drug and side effect representations
+ 386:         self.crossProduction = CrossProduction(cross_dim=128,feature_dim=128,input_channel=self.feature_nums) # Cross-product module
+ 387: 
+ 388:         self.attention = Attention(inputdim=128*3,heads=4) # Attention module
+ 389: 
+ 390:         self.gaussian_parametrizer = GaussianParametrizer(feature_dim=128*3,latent_dim=args.gp)  # BVE module
+ 391: 
+ 392:         self.classifier = Classifier(latent_dim=args.gp,classes=5,args=args) # prediction module
+ 393: 
