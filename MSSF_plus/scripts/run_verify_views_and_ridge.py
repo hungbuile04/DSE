@@ -142,14 +142,32 @@ def verify_instantiated_views_and_modules() -> None:
     print()
 
 
-def _load_dev_fold_summary(results_dir: str, exp_name: str, split_type: str = 'B', folds: List[int] = [0, 1, 2]) -> Dict:
-    mdir = os.path.join(results_dir, f"{exp_name}_{split_type}")
-    cfg_path = os.path.join(mdir, 'config.json')
-    cfg_json = {}
-    if os.path.exists(cfg_path):
-        with open(cfg_path, 'r') as f:
-            cfg_json = json.load(f)
-    fold_records = cfg_json.get('summary', {}).get('fold_records', {})
+def _pull_method_dir_from_drive(results_dir: str, drive_dir: str, method_folder: str) -> None:
+    import shutil
+    if not drive_dir:
+        return
+    src_dir = os.path.join(drive_dir, method_folder)
+    dst_dir = os.path.join(results_dir, method_folder)
+    if not os.path.isdir(src_dir):
+        return
+    os.makedirs(dst_dir, exist_ok=True)
+    for fname in os.listdir(src_dir):
+        s_path = os.path.join(src_dir, fname)
+        d_path = os.path.join(dst_dir, fname)
+        if os.path.isfile(s_path) and not os.path.exists(d_path):
+            shutil.copy2(s_path, d_path)
+
+
+def _load_dev_fold_summary(
+    results_dir: str,
+    drive_dir: str,
+    exp_name: str,
+    split_type: str = 'B',
+    folds: List[int] = [0, 1, 2],
+) -> Dict:
+    method_folder = f"{exp_name}_{split_type}"
+    _pull_method_dir_from_drive(results_dir, drive_dir, method_folder)
+    mdir = os.path.join(results_dir, method_folder)
 
     per_fold = {}
     for k in folds:
@@ -161,14 +179,19 @@ def _load_dev_fold_summary(results_dir: str, exp_name: str, split_type: str = 'B
         probs = np.load(v_prb_p).astype(np.float32)
         y_pred = np.argmax(probs, axis=1)
         m = compute_multiclass_metrics(y_true, y_pred, probs=probs)
-        rec = fold_records.get(str(k), fold_records.get(k, {}))
+
+        rec = {}
+        f_sum_p = os.path.join(mdir, f"fold_{k}_summary.json")
+        if os.path.exists(f_sum_p):
+            with open(f_sum_p, 'r', encoding='utf-8') as f:
+                rec = json.load(f)
+
         m['best_epoch'] = rec.get('best_epoch', -1)
         m['best_train_macro_f1'] = rec.get('best_train_macro_f1', float('nan'))
-        m['gap_eval'] = (
-            float(m['best_train_macro_f1']) - float(m['MacroF1'])
-            if not np.isnan(m.get('best_train_macro_f1', float('nan')))
-            else float(rec.get('train_valsel_macro_f1_gap', float('nan')))
-        )
+        if not np.isnan(m.get('best_train_macro_f1', float('nan'))):
+            m['gap_eval'] = float(m['best_train_macro_f1']) - float(m['MacroF1'])
+        else:
+            m['gap_eval'] = float(rec.get('train_valsel_macro_f1_gap', float('nan')))
         m['elapsed_sec'] = rec.get('elapsed_sec', float('nan'))
         per_fold[k] = m
     return per_fold
@@ -184,7 +207,7 @@ def run_item2_ridge_vs_mlp_folds012(
     print("=" * 110)
 
     for exp_n in ['C3_ce_unweighted_ridge_selfcorr', 'C3_ce_unweighted_selfcorr', 'MSSF_v2_selfcorr']:
-        _sync_method_dir(results_dir, drive_dir, f"{exp_n}_B", pull_from_drive=True)
+        _pull_method_dir_from_drive(results_dir, drive_dir, f"{exp_n}_B")
 
     run_experiment(
         exp_name='C3_ce_unweighted_ridge_selfcorr',
@@ -215,7 +238,7 @@ def run_item2_ridge_vs_mlp_folds012(
 
     loaded_all = {}
     for exp_n, imp_label in compare_models:
-        pf = _load_dev_fold_summary(results_dir, exp_n, split_type='B', folds=[0, 1, 2])
+        pf = _load_dev_fold_summary(results_dir, drive_dir, exp_n, split_type='B', folds=[0, 1, 2])
         loaded_all[exp_n] = (imp_label, pf)
         for k in sorted(pf.keys()):
             m = pf[k]
