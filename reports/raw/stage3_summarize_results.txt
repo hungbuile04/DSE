@@ -1,0 +1,92 @@
+SCRIPT: MSSF_plus/scripts/summarize_results.py
+COMMAND: python -m MSSF_plus.scripts.summarize_results --results_dir /content/DSE/results_v2 --eval_target valsel --splits B A --folds 0 1 2 --methods MSSF_v2_selfcorr C3_ce_unweighted_ridge_selfcorr --ref_method MSSF_v2_selfcorr --out_raw reports/raw/stage3_summarize_results.txt --drive_dir /content/drive/MyDrive/DSE_results_v2
+==============================================================================================================
+# MSSF_plus Unified Evaluation Summary (Computed from `.npy`)
+
+## Split B — Validation Selection (`val_select`) Results (`results_v2`)
+
+### 1. Overall & Ordinal Classification Metrics (Validation Selection (`val_select`))
+| Method | Folds | Macro-F1 | Weighted-F1 | Accuracy | QWK | MAE | Gap (tr - val) | Time/Fold (s) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `C3_ce_unweighted_ridge_selfcorr` | 3 | 0.4143 ± 0.0206 | 0.5043 ± 0.0145 | 0.5075 ± 0.0149 | 0.5034 ± 0.0470 | 0.5814 ± 0.0256 | +0.3513 ± 0.0619 | 123.2 ± 3.5 |
+| `MSSF_v2_selfcorr` | 3 | 0.3593 ± 0.0095 | 0.4757 ± 0.0088 | 0.5034 ± 0.0321 | 0.4110 ± 0.0054 | 0.6213 ± 0.0764 | +0.3041 ± 0.0396 | 101.1 ± 0.4 |
+
+### 2. Per-Class F1 Breakdown (`c0..c4`, Validation Selection (`val_select`))
+| Method | F1_c0 (Very Rare) | F1_c1 (Rare) | F1_c2 (Infrequent) | F1_c3 (Frequent) | F1_c4 (Very Freq) |
+|---|---:|---:|---:|---:|---:|
+| `C3_ce_unweighted_ridge_selfcorr` | 0.3023 ± 0.0222 | 0.3483 ± 0.0870 | 0.4653 ± 0.0817 | 0.5970 ± 0.0475 | 0.3586 ± 0.0333 |
+| `MSSF_v2_selfcorr` | 0.2379 ± 0.1131 | 0.2972 ± 0.1091 | 0.3608 ± 0.0471 | 0.6381 ± 0.0479 | 0.2623 ± 0.0433 |
+
+### 2b. Per-Fold Breakdown (Validation Selection (`val_select`))
+| Method | Fold | Macro-F1 | Weighted-F1 | Accuracy | QWK | MAE | F1_c0 | F1_c1 | F1_c2 | F1_c3 | F1_c4 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `C3_ce_unweighted_ridge_selfcorr` | 0 | 0.4322 | 0.5248 | 0.5263 | 0.5440 | 0.5453 | 0.2745 | 0.4483 | 0.5049 | 0.6204 | 0.3131 |
+| `C3_ce_unweighted_ridge_selfcorr` | 1 | 0.3855 | 0.4959 | 0.5062 | 0.4376 | 0.5973 | 0.3288 | 0.2363 | 0.3515 | 0.6398 | 0.3710 |
+| `C3_ce_unweighted_ridge_selfcorr` | 2 | 0.4252 | 0.4923 | 0.4900 | 0.5288 | 0.6015 | 0.3036 | 0.3603 | 0.5396 | 0.5308 | 0.3917 |
+| `MSSF_v2_selfcorr` | 0 | 0.3536 | 0.4652 | 0.4580 | 0.4141 | 0.7262 | 0.0784 | 0.4183 | 0.4159 | 0.5705 | 0.2848 |
+| `MSSF_v2_selfcorr` | 1 | 0.3516 | 0.4866 | 0.5274 | 0.4034 | 0.5918 | 0.3276 | 0.1538 | 0.3009 | 0.6754 | 0.3003 |
+| `MSSF_v2_selfcorr` | 2 | 0.3726 | 0.4752 | 0.5247 | 0.4156 | 0.5460 | 0.3077 | 0.3194 | 0.3658 | 0.6684 | 0.2017 |
+
+### 3. C4 Ordinal Conformal Prediction ($\alpha = 0.10$, Target Coverage = 90%, Validation Selection (`val_select`))
+> **Ghi chú (Split B)**: Ở Split B, `val_calib` được chia theo thuốc nên đảm bảo độ phủ (coverage) mang tính trung bình trên thuốc; các cặp tương tác trong cùng một thuốc có tương quan.
+
+| Method | C4 Variant | Pair Coverage | Drug Cov (Mean ± Std) | Drug Cov < 80% | Avg Set Size | Singleton Rate | Contiguity | Cov_c0 | Cov_c1 | Cov_c2 | Cov_c3 | Cov_c4 |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `C3_ce_unweighted_ridge_selfcorr` | `LAC` | 0.9023 ± 0.0129 | 0.9112 ± 0.1214 | 0.1244 ± 0.0352 | 2.521 ± 0.065 | 0.0425 ± 0.0178 | 0.9799 | 0.4139 | 0.7897 | 0.8941 | 0.9722 | 0.8177 |
+| `C3_ce_unweighted_ridge_selfcorr` | `APS` | 0.9135 ± 0.0116 | 0.9256 ± 0.0912 | 0.0796 ± 0.0186 | 2.656 ± 0.072 | 0.0293 ± 0.0099 | 0.9546 | 0.4849 | 0.8064 | 0.9143 | 0.9712 | 0.8407 |
+| `C3_ce_unweighted_ridge_selfcorr` | `Ordinal_LAC` | 0.9018 ± 0.0134 | 0.9100 ± 0.1234 | 0.1343 ± 0.0322 | 2.514 ± 0.065 | 0.0434 ± 0.0190 | 1.0000 | 0.3934 | 0.7856 | 0.8942 | 0.9711 | 0.8216 |
+| `C3_ce_unweighted_ridge_selfcorr` | `Ordinal_APS` | 0.9116 ± 0.0119 | 0.9226 ± 0.0946 | 0.0945 ± 0.0186 | 2.659 ± 0.083 | 0.0321 ± 0.0103 | 1.0000 | 0.4394 | 0.8104 | 0.9169 | 0.9690 | 0.8304 |
+| `MSSF_v2_selfcorr` | `LAC` | 0.8925 ± 0.0080 | 0.8979 ± 0.1189 | 0.1692 ± 0.0507 | 2.760 ± 0.149 | 0.0582 ± 0.0018 | 0.9446 | 0.5300 | 0.7964 | 0.8491 | 0.9771 | 0.7771 |
+| `MSSF_v2_selfcorr` | `APS` | 0.8978 ± 0.0073 | 0.9004 ± 0.1086 | 0.1443 ± 0.0141 | 2.849 ± 0.161 | 0.0377 ± 0.0061 | 0.8876 | 0.5276 | 0.7966 | 0.8650 | 0.9738 | 0.7936 |
+| `MSSF_v2_selfcorr` | `Ordinal_LAC` | 0.8953 ± 0.0098 | 0.9007 ± 0.1148 | 0.1542 ± 0.0601 | 2.746 ± 0.123 | 0.0551 ± 0.0111 | 1.0000 | 0.5085 | 0.8042 | 0.8612 | 0.9773 | 0.7772 |
+| `MSSF_v2_selfcorr` | `Ordinal_APS` | 0.8952 ± 0.0081 | 0.8983 ± 0.1119 | 0.1542 ± 0.0186 | 2.733 ± 0.120 | 0.0665 ± 0.0194 | 1.0000 | 0.4673 | 0.8322 | 0.8708 | 0.9738 | 0.7559 |
+
+### 4. C5 Soft-Label Diagnostics (`K*`, Softened Pair Ratio, and Entropy of `q`)
+| Method | Fold | K_range | K* (`n_clusters`) | Silhouette | Eigengap | Softened Pair Ratio (`frac_smoothed`) | Entropy `H(q)` (all) | Entropy `H(q)` (softened) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `C3_ce_unweighted_ridge_selfcorr` | 0 | [4, 12] | 12 | 0.4673 | 0.0126 | 0.7052 (70.52%) | 0.2179 | 0.3120 |
+| `C3_ce_unweighted_ridge_selfcorr` | 1 | [4, 12] | 5 | 0.4317 | 0.0190 | 0.8327 (83.27%) | 0.2707 | 0.3263 |
+| `C3_ce_unweighted_ridge_selfcorr` | 2 | [4, 12] | 4 | 0.4803 | 0.0227 | 0.8556 (85.56%) | 0.2800 | 0.3293 |
+
+## Split A — Validation Selection (`val_select`) Results (`results_v2`)
+
+### 1. Overall & Ordinal Classification Metrics (Validation Selection (`val_select`))
+| Method | Folds | Macro-F1 | Weighted-F1 | Accuracy | QWK | MAE | Gap (tr - val) | Time/Fold (s) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `C3_ce_unweighted_ridge_selfcorr` | 3 | 0.6503 ± 0.0110 | 0.6867 ± 0.0113 | 0.6873 ± 0.0139 | 0.7230 ± 0.0119 | 0.3683 ± 0.0172 | +0.1806 ± 0.0157 | 123.4 ± 4.4 |
+| `MSSF_v2_selfcorr` | 3 | 0.6421 ± 0.0054 | 0.6804 ± 0.0064 | 0.6818 ± 0.0079 | 0.7151 ± 0.0067 | 0.3768 ± 0.0173 | +0.1813 ± 0.0439 | 102.3 ± 0.1 |
+
+### 2. Per-Class F1 Breakdown (`c0..c4`, Validation Selection (`val_select`))
+| Method | F1_c0 (Very Rare) | F1_c1 (Rare) | F1_c2 (Infrequent) | F1_c3 (Frequent) | F1_c4 (Very Freq) |
+|---|---:|---:|---:|---:|---:|
+| `C3_ce_unweighted_ridge_selfcorr` | 0.6460 ± 0.0264 | 0.6577 ± 0.0109 | 0.6395 ± 0.0148 | 0.7542 ± 0.0198 | 0.5542 ± 0.0176 |
+| `MSSF_v2_selfcorr` | 0.6432 ± 0.0334 | 0.6368 ± 0.0252 | 0.6170 ± 0.0173 | 0.7586 ± 0.0109 | 0.5551 ± 0.0089 |
+
+### 2b. Per-Fold Breakdown (Validation Selection (`val_select`))
+| Method | Fold | Macro-F1 | Weighted-F1 | Accuracy | QWK | MAE | F1_c0 | F1_c1 | F1_c2 | F1_c3 | F1_c4 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `C3_ce_unweighted_ridge_selfcorr` | 0 | 0.6587 | 0.6957 | 0.6943 | 0.7319 | 0.3602 | 0.6556 | 0.6423 | 0.6588 | 0.7600 | 0.5766 |
+| `C3_ce_unweighted_ridge_selfcorr` | 1 | 0.6576 | 0.6936 | 0.6997 | 0.7309 | 0.3524 | 0.6724 | 0.6650 | 0.6229 | 0.7749 | 0.5526 |
+| `C3_ce_unweighted_ridge_selfcorr` | 2 | 0.6347 | 0.6708 | 0.6680 | 0.7061 | 0.3923 | 0.6099 | 0.6659 | 0.6368 | 0.7276 | 0.5335 |
+| `MSSF_v2_selfcorr` | 0 | 0.6450 | 0.6776 | 0.6794 | 0.7137 | 0.3809 | 0.6635 | 0.6371 | 0.5982 | 0.7589 | 0.5674 |
+| `MSSF_v2_selfcorr` | 1 | 0.6468 | 0.6893 | 0.6925 | 0.7240 | 0.3539 | 0.6700 | 0.6057 | 0.6400 | 0.7718 | 0.5465 |
+| `MSSF_v2_selfcorr` | 2 | 0.6345 | 0.6744 | 0.6737 | 0.7077 | 0.3956 | 0.5961 | 0.6675 | 0.6127 | 0.7452 | 0.5512 |
+
+### 3. C4 Ordinal Conformal Prediction ($\alpha = 0.10$, Target Coverage = 90%, Validation Selection (`val_select`))
+| Method | C4 Variant | Pair Coverage | Drug Cov (Mean ± Std) | Drug Cov < 80% | Avg Set Size | Singleton Rate | Contiguity | Cov_c0 | Cov_c1 | Cov_c2 | Cov_c3 | Cov_c4 |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `C3_ce_unweighted_ridge_selfcorr` | `LAC` | 0.9106 ± 0.0033 | 0.9118 ± 0.1854 | 0.1571 ± 0.0144 | 1.782 ± 0.063 | 0.3143 ± 0.0449 | 0.9748 | 0.8224 | 0.9045 | 0.8935 | 0.9457 | 0.8338 |
+| `C3_ce_unweighted_ridge_selfcorr` | `APS` | 0.9147 ± 0.0027 | 0.9126 ± 0.1896 | 0.1499 ± 0.0031 | 1.928 ± 0.051 | 0.2655 ± 0.0338 | 0.9653 | 0.8567 | 0.9134 | 0.9061 | 0.9419 | 0.8374 |
+| `C3_ce_unweighted_ridge_selfcorr` | `Ordinal_LAC` | 0.9087 ± 0.0005 | 0.9090 ± 0.1902 | 0.1635 ± 0.0112 | 1.797 ± 0.058 | 0.2991 ± 0.0411 | 1.0000 | 0.7632 | 0.9036 | 0.8972 | 0.9428 | 0.8383 |
+| `C3_ce_unweighted_ridge_selfcorr` | `Ordinal_APS` | 0.9139 ± 0.0038 | 0.9111 ± 0.1902 | 0.1536 ± 0.0016 | 1.940 ± 0.038 | 0.2723 ± 0.0283 | 1.0000 | 0.8193 | 0.9231 | 0.9120 | 0.9386 | 0.8311 |
+| `MSSF_v2_selfcorr` | `LAC` | 0.9089 ± 0.0008 | 0.9027 ± 0.1986 | 0.1688 ± 0.0042 | 1.802 ± 0.064 | 0.3391 ± 0.0291 | 0.9702 | 0.8224 | 0.8966 | 0.8701 | 0.9611 | 0.8176 |
+| `MSSF_v2_selfcorr` | `APS` | 0.9146 ± 0.0036 | 0.9063 ± 0.1967 | 0.1604 ± 0.0070 | 1.902 ± 0.070 | 0.3202 ± 0.0228 | 0.9633 | 0.8442 | 0.9151 | 0.8849 | 0.9579 | 0.8212 |
+| `MSSF_v2_selfcorr` | `Ordinal_LAC` | 0.9099 ± 0.0016 | 0.9012 ± 0.2023 | 0.1720 ± 0.0042 | 1.816 ± 0.071 | 0.3243 ± 0.0325 | 1.0000 | 0.7757 | 0.8930 | 0.8756 | 0.9615 | 0.8284 |
+| `MSSF_v2_selfcorr` | `Ordinal_APS` | 0.9151 ± 0.0029 | 0.9065 ± 0.1960 | 0.1604 ± 0.0089 | 1.923 ± 0.071 | 0.3272 ± 0.0227 | 1.0000 | 0.8287 | 0.9204 | 0.8905 | 0.9564 | 0.8176 |
+
+### 4. C5 Soft-Label Diagnostics (`K*`, Softened Pair Ratio, and Entropy of `q`)
+| Method | Fold | K_range | K* (`n_clusters`) | Silhouette | Eigengap | Softened Pair Ratio (`frac_smoothed`) | Entropy `H(q)` (all) | Entropy `H(q)` (softened) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `C3_ce_unweighted_ridge_selfcorr` | 0 | [4, 12] | 6 | 0.4630 | 0.0132 | 0.8227 (82.27%) | 0.2686 | 0.3281 |
+| `C3_ce_unweighted_ridge_selfcorr` | 1 | [4, 12] | 6 | 0.4566 | 0.0105 | 0.8091 (80.91%) | 0.2608 | 0.3239 |
+| `C3_ce_unweighted_ridge_selfcorr` | 2 | [4, 12] | 12 | 0.4711 | 0.0148 | 0.7268 (72.68%) | 0.2244 | 0.3126 |
