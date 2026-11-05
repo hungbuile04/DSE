@@ -48,9 +48,7 @@ ABLATION_GROUPS: Dict[str, List[str]] = {
         'C5_single_view',
         'C5_multi_view',
         'C5_multi_view_aux',
-        'C5_single_view_k24',
-        'C5_multi_view_k24',
-        'C5_multi_view_aux_k24',
+        'C5_multi_view_fixedK6',
     ],
     'loo': [
         'MSSF_v2_selfcorr',
@@ -75,6 +73,8 @@ ABLATION_GROUPS: Dict[str, List[str]] = {
     'bvi': [
         'C3_ce_unweighted_ridge_selfcorr',
         'full_no_bvi',
+        'bvi_keep_no_c5',
+        'full_no_bvi_no_c5',
     ],
 }
 

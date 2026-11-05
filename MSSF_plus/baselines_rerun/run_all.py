@@ -18,7 +18,21 @@ from typing import List, Optional
 
 from MSSF_plus.protocol import DEFAULT_RESULTS_V2_DIR
 
-ALL_BASELINES = ['MGPred', 'SDPred', 'MSSF_v2', 'DSGAT', 'A3Net', 'HSTrans', 'MVSL-DSF']
+ALL_BASELINES = [
+    'MGPred',
+    'MGPred_selfcorr',
+    'SDPred',
+    'SDPred_selfcorr',
+    'MSSF_v2',
+    'MSSF_v2_selfcorr',
+    'DSGAT',
+    'A3Net',
+    'HSTrans',
+    'MVSL-DSF',
+    'MVSL-DSF_selfcorr',
+    'CrossFeat',
+    'CrossFeat_selfcorr',
+]
 
 
 def dispatch_baseline(
@@ -35,55 +49,64 @@ def dispatch_baseline(
     eval_test: bool = False,
     device: Optional[str] = None,
 ):
+    if baseline.endswith('_selfcorr'):
+        base_model = baseline[:-len('_selfcorr')]
+        eff_self_corr = True
+    else:
+        base_model = baseline
+        eff_self_corr = profile_self_correction
+
     overrides = {
         'epochs': epochs,
         'batch_size': batch_size,
-        'profile_self_correction': profile_self_correction,
+        'profile_self_correction': eff_self_corr,
         'eval_test': eval_test,
         'device': device,
     }
 
-    if baseline == 'MGPred':
+    if base_model == 'MGPred':
         from MSSF_plus.baselines_rerun.run_mgpred import run_mgpred_experiment
         return run_mgpred_experiment(
             split_type=split_type, mode=mode, custom_folds=custom_folds,
             results_dir=results_dir, drive_dir=drive_dir, resume=resume, overrides=overrides,
         )
-    if baseline == 'SDPred':
+    if base_model == 'SDPred':
         from MSSF_plus.baselines_rerun.run_sdpred import run_sdpred_experiment
         return run_sdpred_experiment(
             split_type=split_type, mode=mode, custom_folds=custom_folds,
             results_dir=results_dir, drive_dir=drive_dir, resume=resume, overrides=overrides,
         )
-    if baseline == 'MSSF_v2':
+    if base_model == 'MSSF_v2':
         from MSSF_plus.train import run_experiment
         clean_overrides = {
             k: v for k, v in {
                 'epochs': epochs,
                 'batch_size': batch_size,
-                'profile_self_correction': profile_self_correction,
+                'profile_self_correction': eff_self_corr,
+                'eval_test': eval_test,
+                'device': device,
             }.items() if v is not None
         }
-        exp_name = 'MSSF_v2_selfcorr' if profile_self_correction else 'MSSF_v2'
+        exp_name = 'MSSF_v2_selfcorr' if eff_self_corr else 'MSSF_v2'
         return run_experiment(
             exp_name=exp_name, split_type=split_type, mode=mode, custom_folds=custom_folds,
             results_dir=results_dir, drive_dir=drive_dir, resume=resume,
-            cli_overrides=clean_overrides, eval_test=eval_test,
+            cli_overrides=clean_overrides,
         )
-    if baseline in ('DSGAT', 'A3Net'):
+    if base_model in ('DSGAT', 'A3Net'):
         from MSSF_plus.baselines_rerun.run_dsgat_a3net import run_pyg_baseline_experiment
         pyg_overrides = {'epochs': epochs, 'train_batch': batch_size, 'eval_test': eval_test, 'device': device}
         return run_pyg_baseline_experiment(
-            model_name=baseline, split_type=split_type, mode=mode, custom_folds=custom_folds,
+            model_name=base_model, split_type=split_type, mode=mode, custom_folds=custom_folds,
             results_dir=results_dir, drive_dir=drive_dir, resume=resume, overrides=pyg_overrides,
         )
-    if baseline == 'HSTrans':
+    if base_model == 'HSTrans':
         from MSSF_plus.baselines_rerun.run_hstrans import run_hstrans_experiment
         return run_hstrans_experiment(
             split_type=split_type, mode=mode, custom_folds=custom_folds,
             results_dir=results_dir, drive_dir=drive_dir, resume=resume, overrides=overrides,
         )
-    if baseline == 'MVSL-DSF':
+    if base_model in ('MVSL-DSF', 'CrossFeat'):
         from MSSF_plus.baselines_rerun.run_mvsl import run_mvsl_experiment
         return run_mvsl_experiment(
             split_type=split_type, mode=mode, custom_folds=custom_folds,

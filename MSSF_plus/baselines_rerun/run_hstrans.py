@@ -252,11 +252,15 @@ def run_hstrans_fold(
 
     best_f1 = -float('inf')
     best_f1_epoch = 1
+    best_train_macro_f1 = 0.0
     best_f1_state = copy.deepcopy(model.state_dict())
 
     best_rmse = float('inf')
     best_rmse_epoch = 1
     best_rmse_state = copy.deepcopy(model.state_dict())
+
+    eval_test = bool(cfg.get('eval_test', False))
+    train_pos_loader = _make_pair_loader(fold_split.train, batch_size=eval_bs, shuffle=False)
 
     for epoch in range(1, epochs + 1):
         model.train()
@@ -305,44 +309,76 @@ def run_hstrans_fold(
 
     # 1. Primary evaluation (MacroF1-selected checkpoint)
     model.load_state_dict(best_f1_state)
+    tr_y, tr_p_f1 = _predict_hstrans(
+        model, train_pos_loader, drug_tokens_t, drug_masks_t, se_tokens_t, se_masks_t, device
+    )
+    train_eval_metrics = eval_regression_predictions(tr_y, tr_p_f1)
+    best_train_macro_f1 = float(train_eval_metrics['MacroF1'])
+
     val_y, val_p_f1 = _predict_hstrans(
         model, valsel_loader, drug_tokens_t, drug_masks_t, se_tokens_t, se_masks_t, device
     )
-    test_y, test_p_f1 = _predict_hstrans(
-        model, test_pos_loader, drug_tokens_t, drug_masks_t, se_tokens_t, se_masks_t, device
-    )
-    _, test_p_neg = _predict_hstrans(
-        model, test_neg_loader, drug_tokens_t, drug_masks_t, se_tokens_t, se_masks_t, device
-    )
-    assert np.array_equal(np.round(test_y), np.round(fold_split.test[:, 2]))
-
-    bin_y = np.concatenate([np.ones(len(test_p_f1)), np.zeros(len(test_p_neg))])
-    bin_s = np.concatenate([test_p_f1, test_p_neg])
-    bin_auc = float(roc_auc_score(bin_y, bin_s))
-    bin_aupr = float(average_precision_score(bin_y, bin_s))
-
+    assert np.array_equal(np.round(val_y), np.round(fold_split.valsel[:, 2]))
     valsel_final = eval_regression_predictions(val_y, val_p_f1)
-    test_metrics_f1 = eval_regression_predictions(test_y, test_p_f1)
-    test_metrics_f1['BinaryAUC'] = bin_auc
-    test_metrics_f1['BinaryAUPR'] = bin_aupr
 
-    # 2. Secondary appendix evaluation (RMSE-selected checkpoint)
-    model.load_state_dict(best_rmse_state)
-    _, test_p_rmse = _predict_hstrans(
-        model, test_pos_loader, drug_tokens_t, drug_masks_t, se_tokens_t, se_masks_t, device
-    )
-    test_metrics_rmse = eval_regression_predictions(test_y, test_p_rmse)
+    if best_rmse_epoch == best_f1_epoch:
+        val_p_rmse = val_p_f1.copy()
+        valsel_metrics_rmse = dict(valsel_final)
+    else:
+        model.load_state_dict(best_rmse_state)
+        _, val_p_rmse = _predict_hstrans(
+            model, valsel_loader, drug_tokens_t, drug_masks_t, se_tokens_t, se_masks_t, device
+        )
+        valsel_metrics_rmse = eval_regression_predictions(val_y, val_p_rmse)
+
+    if eval_test:
+        model.load_state_dict(best_f1_state)
+        test_y, test_p_f1 = _predict_hstrans(
+            model, test_pos_loader, drug_tokens_t, drug_masks_t, se_tokens_t, se_masks_t, device
+        )
+        _, test_p_neg = _predict_hstrans(
+            model, test_neg_loader, drug_tokens_t, drug_masks_t, se_tokens_t, se_masks_t, device
+        )
+        assert np.array_equal(np.round(test_y), np.round(fold_split.test[:, 2]))
+
+        bin_y = np.concatenate([np.ones(len(test_p_f1)), np.zeros(len(test_p_neg))])
+        bin_s = np.concatenate([test_p_f1, test_p_neg])
+        bin_auc = float(roc_auc_score(bin_y, bin_s))
+        bin_aupr = float(average_precision_score(bin_y, bin_s))
+
+        test_metrics_f1 = eval_regression_predictions(test_y, test_p_f1)
+        test_metrics_f1['BinaryAUC'] = bin_auc
+        test_metrics_f1['BinaryAUPR'] = bin_aupr
+
+        if best_rmse_epoch == best_f1_epoch:
+            test_p_rmse = test_p_f1.copy()
+            test_metrics_rmse = dict(test_metrics_f1)
+        else:
+            model.load_state_dict(best_rmse_state)
+            _, test_p_rmse = _predict_hstrans(
+                model, test_pos_loader, drug_tokens_t, drug_masks_t, se_tokens_t, se_masks_t, device
+            )
+            test_metrics_rmse = eval_regression_predictions(test_y, test_p_rmse)
+    else:
+        test_p_f1 = None
+        test_p_rmse = None
+        test_metrics_f1 = None
+        test_metrics_rmse = None
 
     elapsed = time.time() - t0
+    train_valsel_gap = float(best_train_macro_f1 - float(valsel_final['MacroF1']))
     fold_summary = {
         'method_name': 'HSTrans',
         'split_type': split_type,
         'fold': int(fold),
         'best_epoch': int(best_f1_epoch),
         'best_valsel_MacroF1': float(best_f1),
+        'best_train_macro_f1': float(best_train_macro_f1),
+        'train_valsel_macro_f1_gap': float(train_valsel_gap),
         'best_rmse_epoch': int(best_rmse_epoch),
         'best_valsel_RMSE': float(best_rmse),
         'valsel_metrics': valsel_final,
+        'rmse_sel_valsel_metrics': valsel_metrics_rmse,
         'test_metrics': test_metrics_f1,
         'rmse_sel_test_metrics': test_metrics_rmse,
         'elapsed_seconds': float(elapsed),
@@ -358,13 +394,20 @@ def run_hstrans_fold(
         results_dir=results_dir,
         drive_dir=drive_dir,
         rmse_sel_preds_float=test_p_rmse,
+        valsel_split=fold_split.valsel,
+        valsel_preds_float=val_p_f1,
+        rmse_sel_valsel_preds_float=val_p_rmse,
+        eval_test=eval_test,
     )
 
     if verbose:
+        thr_m = fold_summary.get('valsel_thr_metrics', {})
+        thr_f1_str = f", thr_MacroF1={thr_m['MacroF1']:.4f}" if 'MacroF1' in thr_m else ""
         print(
-            f"  --> HSTrans Fold {fold} Done ({elapsed:.1f}s) | "
-            f"Test MacroF1={test_metrics_f1['MacroF1']:.4f}, QWK={test_metrics_f1['QWK']:.4f}, "
-            f"RMSE={test_metrics_f1['RMSE']:.4f}, BinAUC={bin_auc:.4f}"
+            f"  --> HSTrans Fold {fold} Done ({elapsed:.1f}s) | Best Ep={best_f1_epoch} | "
+            f"valsel MacroF1={valsel_final['MacroF1']:.4f}{thr_f1_str}, QWK={valsel_final['QWK']:.4f}, "
+            f"MAE={valsel_final['MAE']:.4f}, RMSE={valsel_final['RMSE']:.4f} | "
+            f"Gap(tr-val)={train_valsel_gap:+.4f}"
         )
     return fold_summary
 
@@ -388,6 +431,7 @@ def run_hstrans_experiment(
         'lr': 1e-4,
         'weight_decay': 0.01,
         'selection_metric': 'MacroF1',
+        'eval_test': False,
         'device': None,
     }
     if overrides:
@@ -395,6 +439,7 @@ def run_hstrans_experiment(
             if v is not None:
                 cfg[k] = v
 
+    eval_test = bool(cfg.get('eval_test', False))
     folds = get_fold_list(mode=mode, custom_folds=custom_folds)
     device = get_device(cfg.get('device'))
     TransCls = _import_hstrans_model()
@@ -410,14 +455,15 @@ def run_hstrans_experiment(
     for fold in folds:
         if resume:
             cached = try_restore_baseline_fold(
-                'HSTrans', split_type, fold, results_dir, drive_dir=drive_dir, has_rmse_sel=True
+                'HSTrans', split_type, fold, results_dir,
+                drive_dir=drive_dir, has_rmse_sel=True, eval_test=eval_test,
             )
             if cached is not None:
                 if verbose:
-                    tm = cached['test_metrics']
+                    vm = cached['valsel_metrics']
                     print(
                         f"  [RESUME] Skipping HSTrans_{split_type} Fold {fold} "
-                        f"(MacroF1={tm['MacroF1']:.4f}, RMSE={tm['RMSE']:.4f})"
+                        f"(valsel MacroF1={vm['MacroF1']:.4f}, RMSE={vm['RMSE']:.4f})"
                     )
                 fold_summaries.append(cached)
                 continue
@@ -459,6 +505,7 @@ def main():
     parser.add_argument('--batch_size', type=int, default=None)
     parser.add_argument('--lr', type=float, default=None)
     parser.add_argument('--wd', type=float, default=None)
+    parser.add_argument('--eval_test', action='store_true')
     parser.add_argument('--device', type=str, default=None)
     parser.add_argument('--results_dir', type=str, default=DEFAULT_RESULTS_V2_DIR)
     parser.add_argument('--drive_dir', type=str, default=None)
@@ -478,6 +525,7 @@ def main():
             'batch_size': args.batch_size,
             'lr': args.lr,
             'weight_decay': args.wd,
+            'eval_test': bool(args.eval_test),
             'device': args.device,
         },
         verbose=True,

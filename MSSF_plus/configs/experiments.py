@@ -51,6 +51,7 @@ BASE_CONFIG: Dict[str, object] = {
     'c5_knn_k': 15,
     'c5_k_min': 4,
     'c5_k_max': 12,
+    'c5_fixed_k': None,
     'c5_single_view_name': 'D5_stitch_five',
     'c5_view_weighting': 'uniform', # 'uniform' | 'quality'
     'c5_aux_cluster_weight': 0.0,
@@ -243,6 +244,15 @@ EXPERIMENTS: Dict[str, Dict[str, object]] = {
         c5_k_max=12,
         c5_aux_cluster_weight=0.05,
     ),
+    'C5_multi_view_fixedK6': _make_cfg(
+        'C5_multi_view_fixedK6',
+        c5_mode='multi_view',
+        c5_alpha=0.15,
+        c5_k_min=4,
+        c5_k_max=12,
+        c5_fixed_k=6,
+        c5_aux_cluster_weight=0.0,
+    ),
     'C5_single_view_k24': _make_cfg(
         'C5_single_view_k24',
         c5_mode='single_view',
@@ -327,10 +337,24 @@ EXPERIMENTS: Dict[str, Dict[str, object]] = {
         c5_mode='none',
         c5_aux_cluster_weight=0.0,
     ),
-    # Stage 4: BVI ablation (replaces GaussianParametrizer with Linear(384 -> 64) + Dropout, drops KL)
+    # Stage 4: 2x2 BVI x C5 factorial ablation ({keep BVI, drop BVI} x {enable C5, disable C5})
     'full_no_bvi': _make_cfg(
         'full_no_bvi',
         **_FULL_NON_C3_KWARGS,
+        c3_loss_type='ce',
+        c3_class_weighting=False,
+        use_bvi=False,
+    ),
+    'bvi_keep_no_c5': _make_cfg(
+        'bvi_keep_no_c5',
+        **{**_FULL_NON_C3_KWARGS, 'c5_mode': 'none'},
+        c3_loss_type='ce',
+        c3_class_weighting=False,
+        use_bvi=True,
+    ),
+    'full_no_bvi_no_c5': _make_cfg(
+        'full_no_bvi_no_c5',
+        **{**_FULL_NON_C3_KWARGS, 'c5_mode': 'none'},
         c3_loss_type='ce',
         c3_class_weighting=False,
         use_bvi=False,

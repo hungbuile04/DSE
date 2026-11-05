@@ -40,7 +40,13 @@ from MSSF_plus.losses import (
     logits_to_probs,
     MSSFPlusCriterion,
 )
-from MSSF_plus.conformal import evaluate_all_conformal_methods
+from MSSF_plus.conformal import (
+    evaluate_all_conformal_methods,
+    run_lac,
+    run_aps,
+    run_ordinal_lac,
+    run_ordinal_aps,
+)
 from MSSF_plus.configs.experiments import get_experiment_config, EXPERIMENTS
 
 
@@ -106,6 +112,59 @@ def evaluate_loader(
     return metrics, y_true_class, y_pred_class, probs_arr
 
 
+@torch.no_grad()
+def compute_loader_sigma(
+    model: MSSFPlusModel,
+    loader: torch.utils.data.DataLoader,
+    device: torch.device,
+    mask_d9d10: bool = False,
+) -> Optional[np.ndarray]:
+    """
+    Compute per-pair mean posterior standard deviation sigma_i = mean_j exp(0.5 * logvar_{i,j})
+    in model.eval() mode when model.use_bvi is True.
+    If mask_d9d10=True, masks D9 and D10 to their C1 fallback vectors with availability=0
+    to measure posterior uncertainty on pairs missing D9, D10.
+    """
+    if not getattr(model, 'use_bvi', True):
+        return None
+    model.eval()
+    all_sigmas = []
+    for batch in loader:
+        drugs = batch['drug_feat'].to(device)
+        sides = batch['se_feat'].to(device)
+        d_avail = batch['drug_avail'].to(device)
+        s_avail = batch['se_avail'].to(device)
+        fb_d9 = batch['fallback_d9'].to(device)
+        fb_d10 = batch['fallback_d10'].to(device)
+        d_idx = batch['drug_idx'].to(device)
+        s_idx = batch['se_idx'].to(device)
+
+        if mask_d9d10:
+            drugs = drugs.clone()
+            d_avail = d_avail.clone()
+            d_dim = fb_d9.shape[1]
+            drugs[:, 8 * d_dim:9 * d_dim] = fb_d9
+            drugs[:, 9 * d_dim:10 * d_dim] = fb_d10
+            d_avail[:, 8] = 0.0
+            d_avail[:, 9] = 0.0
+            d_idx_Arg = None
+            s_idx_Arg = None
+        else:
+            d_idx_Arg = d_idx
+            s_idx_Arg = s_idx
+
+        _, _, _, _, logvar, _, _, _ = model(
+            drugs, sides, drug_avail=d_avail, se_avail=s_avail,
+            fallback_d9=fb_d9, fallback_d10=fb_d10,
+            drug_idx=d_idx_Arg, se_idx=s_idx_Arg,
+        )
+        if logvar is None:
+            return None
+        sigma_b = torch.exp(0.5 * logvar).mean(dim=1).detach().cpu().numpy().astype(np.float32)
+        all_sigmas.append(sigma_b)
+    return np.concatenate(all_sigmas).astype(np.float32) if all_sigmas else None
+
+
 _FOLD_PREP_CACHE: Dict[tuple, tuple] = {}
 
 
@@ -124,6 +183,7 @@ def _get_or_build_fold_prep(fold: int, split_type: str, cfg: dict, fold_seed: in
         float(cfg.get('c5_alpha', 0.15)),
         int(cfg.get('c5_k_min', 4)),
         int(cfg.get('c5_k_max', 12)),
+        int(cfg.get('c5_fixed_k') or 0),
         int(cfg.get('c5_min_samples', 3)),
     )
     if cache_key in _FOLD_PREP_CACHE:
@@ -348,6 +408,94 @@ def run_single_fold(
     np.save(os.path.join(method_dir, f'fold_{fold}_valsel_labels.npy'), valsel_true_c.astype(np.int64))
     np.save(os.path.join(method_dir, f'fold_{fold}_valsel_probs.npy'), valsel_probs.astype(np.float32))
 
+    # Stage 4 BVI posterior uncertainty diagnostics: save fold_{k}_sigma.npy and compute group stats + C4 correlation
+    bvi_diagnostics = None
+    if getattr(model, 'use_bvi', True):
+        import scipy.stats as sp_stats
+        valsel_sigma = compute_loader_sigma(model, valsel_loader, device=device, mask_d9d10=False)
+        train_sigma = compute_loader_sigma(model, train_eval_loader, device=device, mask_d9d10=False)
+        if valsel_sigma is not None:
+            np.save(os.path.join(method_dir, f'fold_{fold}_sigma.npy'), valsel_sigma.astype(np.float32))
+            if train_sigma is not None:
+                np.save(os.path.join(method_dir, f'fold_{fold}_train_sigma.npy'), train_sigma.astype(np.float32))
+
+            if split_type == 'A':
+                valsel_sigma_no_d9d10 = compute_loader_sigma(
+                    model, valsel_loader, device=device, mask_d9d10=True
+                )
+                np.save(
+                    os.path.join(method_dir, f'fold_{fold}_sigma_no_d9d10.npy'),
+                    valsel_sigma_no_d9d10.astype(np.float32),
+                )
+                sigma_has_d9d10_mean = float(np.mean(valsel_sigma))
+                sigma_has_d9d10_std = float(np.std(valsel_sigma))
+                sigma_missing_d9d10_mean = float(np.mean(valsel_sigma_no_d9d10))
+                sigma_missing_d9d10_std = float(np.std(valsel_sigma_no_d9d10))
+            else:
+                sigma_has_d9d10_mean = float(np.mean(train_sigma)) if train_sigma is not None else float('nan')
+                sigma_has_d9d10_std = float(np.std(train_sigma)) if train_sigma is not None else float('nan')
+                sigma_missing_d9d10_mean = float(np.mean(valsel_sigma))
+                sigma_missing_d9d10_std = float(np.std(valsel_sigma))
+
+            valsel_d_ids = fold_split.valsel[:, 0].astype(int)
+            static_indices = [i for i in range(fold_views.drug_availability.shape[1]) if i not in (8, 9)]
+            static_avail = fold_views.drug_availability[valsel_d_ids][:, static_indices]
+            full_static_mask = np.all(static_avail > 0.5, axis=1)
+            sigma_full_static_mean = (
+                float(np.mean(valsel_sigma[full_static_mask])) if np.any(full_static_mask) else float('nan')
+            )
+            sigma_missing_static_mean = (
+                float(np.mean(valsel_sigma[~full_static_mask])) if np.any(~full_static_mask) else float('nan')
+            )
+
+            _, sets_lac = run_lac(valcal_probs, valcal_true_c, valsel_probs, valsel_true_c, alpha=c4_alpha)
+            _, sets_aps = run_aps(
+                valcal_probs, valcal_true_c, valsel_probs, valsel_true_c, alpha=c4_alpha, seed=fold_seed
+            )
+            _, sets_olac = run_ordinal_lac(
+                valcal_probs, valcal_true_c, valsel_probs, valsel_true_c, alpha=c4_alpha
+            )
+            _, sets_oaps = run_ordinal_aps(
+                valcal_probs, valcal_true_c, valsel_probs, valsel_true_c, alpha=c4_alpha, seed=fold_seed
+            )
+
+            def _corr_pair(sig: np.ndarray, psets: np.ndarray) -> Tuple[float, float]:
+                sz = psets.sum(axis=1).astype(np.float64)
+                s64 = sig.astype(np.float64)
+                if len(s64) < 3 or np.std(s64) < 1e-12 or np.std(sz) < 1e-12:
+                    return 0.0, 0.0
+                pr = float(sp_stats.pearsonr(s64, sz)[0])
+                sr = float(sp_stats.spearmanr(s64, sz)[0])
+                return pr, sr
+
+            r_oaps, rho_oaps = _corr_pair(valsel_sigma, sets_oaps)
+            r_olac, rho_olac = _corr_pair(valsel_sigma, sets_olac)
+            r_aps, rho_aps = _corr_pair(valsel_sigma, sets_aps)
+            r_lac, rho_lac = _corr_pair(valsel_sigma, sets_lac)
+
+            bvi_diagnostics = {
+                'valsel_sigma_mean': float(np.mean(valsel_sigma)),
+                'valsel_sigma_std': float(np.std(valsel_sigma)),
+                'train_sigma_mean': float(np.mean(train_sigma)) if train_sigma is not None else float('nan'),
+                'train_sigma_std': float(np.std(train_sigma)) if train_sigma is not None else float('nan'),
+                'sigma_has_d9d10_mean': sigma_has_d9d10_mean,
+                'sigma_has_d9d10_std': sigma_has_d9d10_std,
+                'sigma_missing_d9d10_mean': sigma_missing_d9d10_mean,
+                'sigma_missing_d9d10_std': sigma_missing_d9d10_std,
+                'sigma_full_static_mean': sigma_full_static_mean,
+                'sigma_missing_static_mean': sigma_missing_static_mean,
+                'n_valsel_full_static': int(np.sum(full_static_mask)),
+                'n_valsel_missing_static': int(np.sum(~full_static_mask)),
+                'corr_sigma_ord_aps_pearson': r_oaps,
+                'corr_sigma_ord_aps_spearman': rho_oaps,
+                'corr_sigma_ord_lac_pearson': r_olac,
+                'corr_sigma_ord_lac_spearman': rho_olac,
+                'corr_sigma_aps_pearson': r_aps,
+                'corr_sigma_aps_spearman': rho_aps,
+                'corr_sigma_lac_pearson': r_lac,
+                'corr_sigma_lac_spearman': rho_lac,
+            }
+
     if eval_test:
         test_metrics, test_true_c, test_pred_c, test_probs = evaluate_loader(
             model, test_loader, loss_type=loss_type, device=device,
@@ -400,6 +548,7 @@ def run_single_fold(
         'test_metrics': test_metrics,
         'conformal': conformal_res,
         'c5_diagnostics': soft_res.diagnostics,
+        'bvi_diagnostics': bvi_diagnostics,
         'n_drug_views': int(n_drug_views),
         'n_se_views': int(n_se_views),
         'prep_elapsed_seconds': float(prep_elapsed),
@@ -460,18 +609,28 @@ def _try_restore_completed_fold(
         f'fold_{fold}_valcal_probs.npy',
         f'fold_{fold}_summary.json',
     ]
+    opt_bvi_files = [
+        f'fold_{fold}_sigma.npy',
+        f'fold_{fold}_train_sigma.npy',
+        f'fold_{fold}_sigma_no_d9d10.npy',
+    ]
     test_req_files = [
         f'fold_{fold}_labels.npy',
         f'fold_{fold}_preds.npy',
         f'fold_{fold}_probs.npy',
     ]
     req_files = base_req_files + (test_req_files if eval_test else [])
+    if cfg is not None and bool(cfg.get('use_bvi', True)) and cfg.get('exp_name') in (
+        'C3_ce_unweighted_ridge_selfcorr',
+        'bvi_keep_no_c5',
+    ):
+        req_files = req_files + [f'fold_{fold}_sigma.npy']
 
     if drive_dir:
         drive_method_dir = os.path.join(drive_dir, method_folder)
         if os.path.isdir(drive_method_dir):
             os.makedirs(method_dir, exist_ok=True)
-            for fname in req_files:
+            for fname in set(req_files + opt_bvi_files):
                 local_p = os.path.join(method_dir, fname)
                 drive_p = os.path.join(drive_method_dir, fname)
                 if not os.path.exists(local_p) and os.path.exists(drive_p):
@@ -482,6 +641,13 @@ def _try_restore_completed_fold(
         with open(sum_file, 'r', encoding='utf-8') as f:
             summary_data = json.load(f)
         if summary_data.get('train_eval_mode', False) is True and 'best_train_macro_f1' in summary_data:
+            if (
+                cfg is not None
+                and bool(cfg.get('use_bvi', True))
+                and cfg.get('exp_name') in ('C3_ce_unweighted_ridge_selfcorr', 'bvi_keep_no_c5')
+                and not summary_data.get('bvi_diagnostics')
+            ):
+                return None
             c5d = summary_data.get('c5_diagnostics', {})
             if cfg is not None and split_type is not None and ('entropy_q' not in c5d or 'k_max' not in c5d):
                 fold_seed = int(cfg.get('seed', 42)) + int(fold)

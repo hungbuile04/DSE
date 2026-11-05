@@ -245,12 +245,15 @@ def run_pyg_baseline_fold(
 
     best_f1 = -float('inf')
     best_f1_epoch = 1
+    best_train_macro_f1 = 0.0
     best_f1_state = copy.deepcopy(model.state_dict())
 
     best_rmse = float('inf')
     best_rmse_epoch = 1
     best_rmse_state = copy.deepcopy(model.state_dict())
 
+    eval_test = bool(cfg.get('eval_test', False))
+    train_true = fold_split.train[:, 2].astype(np.float32)
     val_true = fold_split.valsel[:, 2].astype(np.float32)
     test_true = fold_split.test[:, 2].astype(np.float32)
 
@@ -296,29 +299,61 @@ def run_pyg_baseline_fold(
 
     # 1. Primary evaluation (MacroF1-selected checkpoint)
     model.load_state_dict(best_f1_state)
+    train_p_f1 = _predict_pairs_pyg(
+        model, PyGDataLoaderCls, DataCls, fold_split.train,
+        feat_list, edge_list, se_graph_dev, device,
+        df_flag=df_flag, not_fc_flag=not_fc_flag,
+    )
+    train_eval_metrics = eval_regression_predictions(train_true, train_p_f1)
+    best_train_macro_f1 = float(train_eval_metrics['MacroF1'])
+
     val_p_f1 = _predict_pairs_pyg(
         model, PyGDataLoaderCls, DataCls, fold_split.valsel,
         feat_list, edge_list, se_graph_dev, device,
         df_flag=df_flag, not_fc_flag=not_fc_flag,
     )
-    test_p_f1 = _predict_pairs_pyg(
-        model, PyGDataLoaderCls, DataCls, fold_split.test,
-        feat_list, edge_list, se_graph_dev, device,
-        df_flag=df_flag, not_fc_flag=not_fc_flag,
-    )
     valsel_final = eval_regression_predictions(val_true, val_p_f1)
-    test_metrics_f1 = eval_regression_predictions(test_true, test_p_f1)
 
-    # 2. Secondary appendix evaluation (RMSE-selected checkpoint)
-    model.load_state_dict(best_rmse_state)
-    test_p_rmse = _predict_pairs_pyg(
-        model, PyGDataLoaderCls, DataCls, fold_split.test,
-        feat_list, edge_list, se_graph_dev, device,
-        df_flag=df_flag, not_fc_flag=not_fc_flag,
-    )
-    test_metrics_rmse = eval_regression_predictions(test_true, test_p_rmse)
+    if best_rmse_epoch == best_f1_epoch:
+        val_p_rmse = val_p_f1.copy()
+        valsel_metrics_rmse = dict(valsel_final)
+    else:
+        model.load_state_dict(best_rmse_state)
+        val_p_rmse = _predict_pairs_pyg(
+            model, PyGDataLoaderCls, DataCls, fold_split.valsel,
+            feat_list, edge_list, se_graph_dev, device,
+            df_flag=df_flag, not_fc_flag=not_fc_flag,
+        )
+        valsel_metrics_rmse = eval_regression_predictions(val_true, val_p_rmse)
+
+    if eval_test:
+        model.load_state_dict(best_f1_state)
+        test_p_f1 = _predict_pairs_pyg(
+            model, PyGDataLoaderCls, DataCls, fold_split.test,
+            feat_list, edge_list, se_graph_dev, device,
+            df_flag=df_flag, not_fc_flag=not_fc_flag,
+        )
+        test_metrics_f1 = eval_regression_predictions(test_true, test_p_f1)
+
+        if best_rmse_epoch == best_f1_epoch:
+            test_p_rmse = test_p_f1.copy()
+            test_metrics_rmse = dict(test_metrics_f1)
+        else:
+            model.load_state_dict(best_rmse_state)
+            test_p_rmse = _predict_pairs_pyg(
+                model, PyGDataLoaderCls, DataCls, fold_split.test,
+                feat_list, edge_list, se_graph_dev, device,
+                df_flag=df_flag, not_fc_flag=not_fc_flag,
+            )
+            test_metrics_rmse = eval_regression_predictions(test_true, test_p_rmse)
+    else:
+        test_p_f1 = None
+        test_p_rmse = None
+        test_metrics_f1 = None
+        test_metrics_rmse = None
 
     elapsed = time.time() - t0
+    train_valsel_gap = float(best_train_macro_f1 - float(valsel_final['MacroF1']))
     fold_summary = {
         'method_name': model_name,
         'split_type': split_type,
@@ -326,9 +361,12 @@ def run_pyg_baseline_fold(
         'n_active_train_drugs': int(len(active_train_drugs)),
         'best_epoch': int(best_f1_epoch),
         'best_valsel_MacroF1': float(best_f1),
+        'best_train_macro_f1': float(best_train_macro_f1),
+        'train_valsel_macro_f1_gap': float(train_valsel_gap),
         'best_rmse_epoch': int(best_rmse_epoch),
         'best_valsel_RMSE': float(best_rmse),
         'valsel_metrics': valsel_final,
+        'rmse_sel_valsel_metrics': valsel_metrics_rmse,
         'test_metrics': test_metrics_f1,
         'rmse_sel_test_metrics': test_metrics_rmse,
         'elapsed_seconds': float(elapsed),
@@ -344,13 +382,20 @@ def run_pyg_baseline_fold(
         results_dir=results_dir,
         drive_dir=drive_dir,
         rmse_sel_preds_float=test_p_rmse,
+        valsel_split=fold_split.valsel,
+        valsel_preds_float=val_p_f1,
+        rmse_sel_valsel_preds_float=val_p_rmse,
+        eval_test=eval_test,
     )
 
     if verbose:
+        thr_m = fold_summary.get('valsel_thr_metrics', {})
+        thr_f1_str = f", thr_MacroF1={thr_m['MacroF1']:.4f}" if 'MacroF1' in thr_m else ""
         print(
-            f"  --> {model_name} Fold {fold} Done ({elapsed:.1f}s) | "
-            f"Test MacroF1={test_metrics_f1['MacroF1']:.4f}, QWK={test_metrics_f1['QWK']:.4f}, "
-            f"RMSE={test_metrics_f1['RMSE']:.4f}, RegMAE={test_metrics_f1['RegMAE']:.4f}"
+            f"  --> {model_name} Fold {fold} Done ({elapsed:.1f}s) | Best Ep={best_f1_epoch} | "
+            f"valsel MacroF1={valsel_final['MacroF1']:.4f}{thr_f1_str}, QWK={valsel_final['QWK']:.4f}, "
+            f"MAE={valsel_final['MAE']:.4f}, RMSE={valsel_final['RMSE']:.4f} | "
+            f"Gap(tr-val)={train_valsel_gap:+.4f}"
         )
     return fold_summary
 
@@ -387,6 +432,7 @@ def run_pyg_baseline_experiment(
         'DF': False,
         'not_FC': False,
         'selection_metric': 'MacroF1',
+        'eval_test': False,
         'device': None,
     }
     if overrides:
@@ -394,6 +440,7 @@ def run_pyg_baseline_experiment(
             if v is not None:
                 cfg[k] = v
 
+    eval_test = bool(cfg.get('eval_test', False))
     folds = get_fold_list(mode=mode, custom_folds=custom_folds)
     device = get_device(cfg.get('device'))
 
@@ -412,14 +459,15 @@ def run_pyg_baseline_experiment(
     for fold in folds:
         if resume:
             cached = try_restore_baseline_fold(
-                model_name, split_type, fold, results_dir, drive_dir=drive_dir, has_rmse_sel=True
+                model_name, split_type, fold, results_dir,
+                drive_dir=drive_dir, has_rmse_sel=True, eval_test=eval_test,
             )
             if cached is not None:
                 if verbose:
-                    tm = cached['test_metrics']
+                    vm = cached['valsel_metrics']
                     print(
                         f"  [RESUME] Skipping {model_name}_{split_type} Fold {fold} "
-                        f"(MacroF1={tm['MacroF1']:.4f}, RMSE={tm['RMSE']:.4f})"
+                        f"(valsel MacroF1={vm['MacroF1']:.4f}, RMSE={vm['RMSE']:.4f})"
                     )
                 fold_summaries.append(cached)
                 continue
@@ -465,6 +513,7 @@ def main():
     parser.add_argument('--lr', type=float, default=None)
     parser.add_argument('--wd', type=float, default=None)
     parser.add_argument('--knn', type=int, default=None)
+    parser.add_argument('--eval_test', action='store_true')
     parser.add_argument('--device', type=str, default=None)
     parser.add_argument('--results_dir', type=str, default=DEFAULT_RESULTS_V2_DIR)
     parser.add_argument('--drive_dir', type=str, default=None)
@@ -486,6 +535,7 @@ def main():
             'lr': args.lr,
             'weight_decay': args.wd,
             'knn': args.knn,
+            'eval_test': bool(args.eval_test),
             'device': args.device,
         },
         verbose=True,

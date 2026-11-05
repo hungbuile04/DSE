@@ -81,6 +81,7 @@ def collect_method_results(
         fold_gaps = []
         fold_times = []
         fold_c5_list = []
+        fold_bvi_list = []
         fold_conformal_list = {k: [] for k in ['LAC', 'APS', 'Ordinal_LAC', 'Ordinal_APS']}
         fold_valsel_conformal_list = {k: [] for k in ['LAC', 'APS', 'Ordinal_LAC', 'Ordinal_APS']}
         folds_found = []
@@ -97,6 +98,9 @@ def collect_method_results(
             vsel_lbl_path = os.path.join(mdir, f'fold_{k}_valsel_labels.npy')
             vsel_prb_path = os.path.join(mdir, f'fold_{k}_valsel_probs.npy')
             vsel_prd_path = os.path.join(mdir, f'fold_{k}_valsel_preds.npy')
+            sigma_path = os.path.join(mdir, f'fold_{k}_sigma.npy')
+            tr_sigma_path = os.path.join(mdir, f'fold_{k}_train_sigma.npy')
+            no_d9d10_sigma_path = os.path.join(mdir, f'fold_{k}_sigma_no_d9d10.npy')
             sum_path = os.path.join(mdir, f'fold_{k}_summary.json')
 
             has_test = os.path.exists(lbl_path) and os.path.exists(prd_path)
@@ -137,6 +141,7 @@ def collect_method_results(
                     vs_metrics_k = compute_multiclass_metrics(vs_c, vs_prd, probs=None)
                 fold_valsel_list.append(vs_metrics_k)
 
+            bvi_k = None
             if os.path.exists(sum_path):
                 with open(sum_path, 'r', encoding='utf-8') as sf:
                     s_json = json.load(sf)
@@ -153,6 +158,30 @@ def collect_method_results(
                     c5d = dict(s_json['c5_diagnostics'])
                     c5d['fold'] = k
                     fold_c5_list.append(c5d)
+                if 'bvi_diagnostics' in s_json and isinstance(s_json['bvi_diagnostics'], dict):
+                    bvi_k = dict(s_json['bvi_diagnostics'])
+                    bvi_k['fold'] = k
+
+            if os.path.exists(sigma_path):
+                sig_arr = np.load(sigma_path).flatten()
+                if bvi_k is None:
+                    bvi_k = {'fold': k}
+                bvi_k['valsel_sigma_mean'] = float(np.mean(sig_arr))
+                bvi_k['valsel_sigma_std'] = float(np.std(sig_arr))
+                if os.path.exists(tr_sigma_path):
+                    tr_sig_arr = np.load(tr_sigma_path).flatten()
+                    bvi_k['train_sigma_mean'] = float(np.mean(tr_sig_arr))
+                    bvi_k['train_sigma_std'] = float(np.std(tr_sig_arr))
+                    if split_type == 'B':
+                        bvi_k['sigma_has_d9d10_mean'] = float(np.mean(tr_sig_arr))
+                        bvi_k['sigma_missing_d9d10_mean'] = float(np.mean(sig_arr))
+                if split_type == 'A':
+                    bvi_k['sigma_has_d9d10_mean'] = float(np.mean(sig_arr))
+                    if os.path.exists(no_d9d10_sigma_path):
+                        no_d_sig = np.load(no_d9d10_sigma_path).flatten()
+                        bvi_k['sigma_missing_d9d10_mean'] = float(np.mean(no_d_sig))
+            if bvi_k is not None:
+                fold_bvi_list.append(bvi_k)
 
             if os.path.exists(vcal_lbl_path) and os.path.exists(vcal_prb_path):
                 vcal_c = np.load(vcal_lbl_path).flatten()
@@ -222,6 +251,7 @@ def collect_method_results(
             'conformal': agg_c4,
             'valsel_conformal': agg_valsel_c4,
             'c5_per_fold': fold_c5_list,
+            'bvi_per_fold': fold_bvi_list,
             'gap_mean': float(np.mean(fold_gaps)) if fold_gaps else float('nan'),
             'gap_std': float(np.std(fold_gaps)) if fold_gaps else float('nan'),
             'fold_gaps': fold_gaps,
@@ -356,7 +386,10 @@ def format_markdown_tables(
         if split_type == 'B':
             lines.append(
                 "> **Ghi chú (Split B)**: Ở Split B, `val_calib` được chia theo thuốc nên đảm bảo độ phủ "
-                "(coverage) mang tính trung bình trên thuốc; các cặp tương tác trong cùng một thuốc có tương quan.\n"
+                "(coverage) mang tính trung bình trên thuốc; các cặp tương tác trong cùng một thuốc có tương quan. "
+                "Đồng thời, độ phủ của lớp `Very Rare` (`Cov_c0`) ở Split B chỉ đạt khoảng `0.39–0.53` dù độ phủ tổng thể "
+                "(`Pair Coverage`) đạt `~0.90` — conformal tiêu chuẩn và thứ tự chỉ đảm bảo độ phủ trung bình (marginal coverage), "
+                "không đảm bảo độ phủ có điều kiện theo từng lớp (class-conditional coverage).\n"
             )
         lines.append(
             "| Method | C4 Variant | Pair Coverage | Drug Cov (Mean ± Std) | Drug Cov < 80% | Avg Set Size | Singleton Rate | Contiguity | Cov_c0 | Cov_c1 | Cov_c2 | Cov_c3 | Cov_c4 |"
@@ -403,7 +436,13 @@ def format_markdown_tables(
                 f_idx = d.get('fold', -1)
                 k_min = d.get('k_min', 0)
                 k_max = d.get('k_max', 0)
-                k_rng = f"[{k_min}, {k_max}]" if k_max > 0 else "N/A"
+                fix_k = int(d.get('fixed_k', 0) or 0)
+                if fix_k > 0:
+                    k_rng = f"fixed={fix_k}"
+                elif k_max > 0:
+                    k_rng = f"[{k_min}, {k_max}]"
+                else:
+                    k_rng = "N/A"
                 k_star = int(d.get('n_clusters', 0))
                 sil = float(d.get('silhouette', 0.0))
                 eg = float(d.get('eigengap', 0.0))
@@ -414,6 +453,43 @@ def format_markdown_tables(
                 ent_sm_s = f"{float(ent_sm):.4f}" if ent_sm is not None else "N/A"
                 lines.append(
                     f"| `{m_name}` | {f_idx} | {k_rng} | {k_star} | {sil:.4f} | {eg:.4f} | {frac:.4f} ({frac*100:.2f}%) | {ent_all_s} | {ent_sm_s} |"
+                )
+
+    # 5. BVI Posterior Uncertainty Diagnostics table (fold_{k}_sigma.npy)
+    has_any_bvi = any(bool(data.get('bvi_per_fold')) for data in collected.values())
+    if has_any_bvi:
+        lines.append(
+            "\n### 5. BVI Posterior Uncertainty Diagnostics (`fold_{k}_sigma.npy`: Full Views vs. Missing `D9, D10` & Correlation with Conformal Set Size)"
+        )
+        lines.append(
+            "| Method | Fold | $\\bar{\\sigma}$ (`val_select`) | $\\bar{\\sigma}$ (Has `D9,D10`) | $\\bar{\\sigma}$ (Missing `D9,D10`) | $\\bar{\\sigma}$ (Full Static Views) | $\\bar{\\sigma}$ (Missing `D7/D11`) | Corr($\\sigma$, `|C|` Ord-APS) $r / \\rho$ | Corr($\\sigma$, `|C|` Ord-LAC) $r / \\rho$ |"
+        )
+        lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|")
+
+        def _fmt_f(v) -> str:
+            return f"{float(v):.4f}" if v is not None and not np.isnan(float(v)) else "N/A"
+
+        for m_name, data in sorted(collected.items()):
+            bvi_list = data.get('bvi_per_fold', [])
+            if not bvi_list:
+                continue
+            for bd in bvi_list:
+                f_idx = bd.get('fold', -1)
+                vs_m = bd.get('valsel_sigma_mean')
+                vs_s = bd.get('valsel_sigma_std')
+                vs_str = f"{float(vs_m):.4f} ± {float(vs_s):.4f}" if vs_m is not None else "N/A"
+                has_d = _fmt_f(bd.get('sigma_has_d9d10_mean'))
+                mis_d = _fmt_f(bd.get('sigma_missing_d9d10_mean'))
+                ful_st = _fmt_f(bd.get('sigma_full_static_mean'))
+                mis_st = _fmt_f(bd.get('sigma_missing_static_mean'))
+                r_oa = bd.get('corr_sigma_ord_aps_pearson')
+                rho_oa = bd.get('corr_sigma_ord_aps_spearman')
+                oa_str = f"{float(r_oa):+.4f} / {float(rho_oa):+.4f}" if r_oa is not None else "N/A"
+                r_ol = bd.get('corr_sigma_ord_lac_pearson')
+                rho_ol = bd.get('corr_sigma_ord_lac_spearman')
+                ol_str = f"{float(r_ol):+.4f} / {float(rho_ol):+.4f}" if r_ol is not None else "N/A"
+                lines.append(
+                    f"| `{m_name}` | {f_idx} | {vs_str} | {has_d} | {mis_d} | {ful_st} | {mis_st} | {oa_str} | {ol_str} |"
                 )
 
     lines.append("")

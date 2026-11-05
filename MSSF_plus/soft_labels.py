@@ -324,6 +324,7 @@ def build_soft_targets(
 
     frac_sm = float(n_smoothed / max(n_train, 1))
     ent_all, ent_sm = _compute_soft_target_entropy(soft_targets, onehot)
+    fixed_k_val = cfg.get('c5_fixed_k', None)
     return SoftLabelResult(
         mode=mode,
         soft_targets=soft_targets,
@@ -333,6 +334,7 @@ def build_soft_targets(
             'n_clusters': int(best_k),
             'k_min': int(k_min),
             'k_max': int(k_max),
+            'fixed_k': int(fixed_k_val) if fixed_k_val is not None else 0,
             'silhouette': float(best_sil),
             'eigengap': float(best_gap),
             'frac_smoothed': frac_sm,

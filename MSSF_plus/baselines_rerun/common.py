@@ -308,7 +308,9 @@ def try_restore_baseline_fold(
             f'fold_{fold}_preds.npy',
         ])
 
-    folders = [(primary_folder, primary_dir)]
+    thr_folder = f'{method_name}_thr_{split_type}'
+    thr_dir = os.path.join(results_dir, thr_folder)
+    folders = [(primary_folder, primary_dir), (thr_folder, thr_dir)]
     if has_rmse_sel:
         rmse_folder = f'{method_name}_rmseSel_{split_type}'
         rmse_dir = os.path.join(results_dir, rmse_folder)
@@ -330,9 +332,34 @@ def try_restore_baseline_fold(
             rmse_dir = os.path.join(results_dir, f'{method_name}_rmseSel_{split_type}')
             if not all(os.path.exists(os.path.join(rmse_dir, f)) for f in req_files[:2]):
                 return None
-        with open(os.path.join(primary_dir, f'fold_{fold}_summary.json'), 'r', encoding='utf-8') as f:
+        sum_path = os.path.join(primary_dir, f'fold_{fold}_summary.json')
+        with open(sum_path, 'r', encoding='utf-8') as f:
             summary_data = json.load(f)
         if 'best_train_macro_f1' in summary_data:
+            # Ensure _thr folder and valsel_thr_metrics exist
+            if not all(os.path.exists(os.path.join(thr_dir, f)) for f in req_files[:3]) or 'valsel_thr_metrics' not in summary_data:
+                vs_labels = np.load(os.path.join(primary_dir, f'fold_{fold}_valsel_labels.npy')).flatten()
+                vs_preds = np.load(os.path.join(primary_dir, f'fold_{fold}_valsel_preds.npy')).flatten()
+                thr = fit_ordinal_thresholds_on_valsel(vs_labels, vs_preds)
+                vs_preds_thr = apply_ordinal_thresholds_to_freq(vs_preds, thr)
+                valsel_thr_metrics = eval_regression_predictions(vs_labels, vs_preds_thr)
+                summary_data['valsel_thresholds'] = [float(x) for x in thr]
+                summary_data['valsel_thr_metrics'] = valsel_thr_metrics
+                os.makedirs(thr_dir, exist_ok=True)
+                np.save(os.path.join(thr_dir, f'fold_{fold}_valsel_labels.npy'), vs_labels)
+                np.save(os.path.join(thr_dir, f'fold_{fold}_valsel_preds.npy'), vs_preds_thr)
+                thr_summary = dict(summary_data)
+                thr_summary['method_name'] = f'{method_name}_thr'
+                thr_summary['valsel_metrics'] = valsel_thr_metrics
+                thr_summary['train_valsel_macro_f1_gap'] = float(
+                    float(summary_data['best_train_macro_f1']) - float(valsel_thr_metrics['MacroF1'])
+                )
+                with open(sum_path, 'w', encoding='utf-8') as f:
+                    json.dump(summary_data, f, indent=2)
+                with open(os.path.join(thr_dir, f'fold_{fold}_summary.json'), 'w', encoding='utf-8') as f:
+                    json.dump(thr_summary, f, indent=2)
+                sync_dir_to_drive(primary_dir, drive_dir, primary_folder)
+                sync_dir_to_drive(thr_dir, drive_dir, thr_folder)
             return summary_data
     return None
 
