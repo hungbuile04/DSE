@@ -142,11 +142,14 @@ def compute_loader_sigma(
         if mask_d9d10:
             drugs = drugs.clone()
             d_avail = d_avail.clone()
-            d_dim = fb_d9.shape[1]
-            drugs[:, 8 * d_dim:9 * d_dim] = fb_d9
-            drugs[:, 9 * d_dim:10 * d_dim] = fb_d10
-            d_avail[:, 8] = 0.0
-            d_avail[:, 9] = 0.0
+            p_idx = getattr(model, 'profile_drug_view_indices', []) or []
+            if len(p_idx) >= 2:
+                i9, i10 = int(p_idx[0]), int(p_idx[1])
+                d_dim = fb_d9.shape[1]
+                drugs[:, i9 * d_dim:(i9 + 1) * d_dim] = fb_d9
+                drugs[:, i10 * d_dim:(i10 + 1) * d_dim] = fb_d10
+                d_avail[:, i9] = 0.0
+                d_avail[:, i10] = 0.0
             d_idx_Arg = None
             s_idx_Arg = None
         else:
@@ -438,8 +441,9 @@ def run_single_fold(
                 sigma_missing_d9d10_std = float(np.std(valsel_sigma))
 
             valsel_d_ids = fold_split.valsel[:, 0].astype(int)
-            static_indices = [i for i in range(fold_views.drug_availability.shape[1]) if i not in (8, 9)]
-            static_avail = fold_views.drug_availability[valsel_d_ids][:, static_indices]
+            prof_set = set(fold_views.profile_drug_view_indices or [])
+            static_indices = [i for i in range(fold_views.drug_avail.shape[1]) if i not in prof_set]
+            static_avail = fold_views.drug_avail[valsel_d_ids][:, static_indices]
             full_static_mask = np.all(static_avail > 0.5, axis=1)
             sigma_full_static_mean = (
                 float(np.mean(valsel_sigma[full_static_mask])) if np.any(full_static_mask) else float('nan')
