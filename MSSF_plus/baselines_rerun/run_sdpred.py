@@ -103,13 +103,64 @@ def _build_sdpred_fold_matrices(
     return drug_mat, side_mat, drug_side_train
 
 
-def _make_index_loader(pairs_with_rating: np.ndarray, batch_size: int, shuffle: bool) -> DataLoader:
-    d = torch.tensor(pairs_with_rating[:, 0].astype(np.int64), dtype=torch.long)
-    s = torch.tensor(pairs_with_rating[:, 1].astype(np.int64), dtype=torch.long)
-    r = torch.tensor(pairs_with_rating[:, 2].astype(np.float32), dtype=torch.float32)
-    ds = TensorDataset(d, s, r)
-    drop_last = bool(shuffle and (len(ds) > batch_size) and (len(ds) % batch_size == 1))
-    return DataLoader(ds, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last)
+class _FastIndexLoader:
+    """Vectorized tensor batch loader avoiding 59,666 per-sample Python __getitem__ calls per epoch."""
+
+    def __init__(
+        self,
+        pairs_with_rating: np.ndarray,
+        batch_size: int,
+        shuffle: bool,
+        device: Optional[torch.device] = None,
+    ):
+        self.n = int(len(pairs_with_rating))
+        self.batch_size = int(batch_size)
+        self.shuffle = bool(shuffle)
+        self.drop_last = bool(shuffle and (self.n > self.batch_size) and (self.n % self.batch_size == 1))
+        self.device = device
+        d_np = pairs_with_rating[:, 0].astype(np.int64)
+        s_np = pairs_with_rating[:, 1].astype(np.int64)
+        r_np = pairs_with_rating[:, 2].astype(np.float32)
+        self.r_cpu = r_np
+        if device is not None and device.type != 'cpu':
+            self.d = torch.tensor(d_np, dtype=torch.long, device=device)
+            self.s = torch.tensor(s_np, dtype=torch.long, device=device)
+            self.r = torch.tensor(r_np, dtype=torch.float32, device=device)
+        else:
+            self.d = torch.tensor(d_np, dtype=torch.long)
+            self.s = torch.tensor(s_np, dtype=torch.long)
+            self.r = torch.tensor(r_np, dtype=torch.float32)
+
+    def __len__(self) -> int:
+        if self.drop_last:
+            return self.n // self.batch_size
+        return (self.n + self.batch_size - 1) // self.batch_size
+
+    def __iter__(self):
+        if self.shuffle:
+            perm_cpu = torch.randperm(self.n)
+            perm = perm_cpu.to(self.d.device) if self.d.device.type != 'cpu' else perm_cpu
+            d_ep = self.d[perm]
+            s_ep = self.s[perm]
+            r_ep = self.r[perm]
+        else:
+            d_ep = self.d
+            s_ep = self.s
+            r_ep = self.r
+
+        limit = (self.n // self.batch_size) * self.batch_size if self.drop_last else self.n
+        for start in range(0, limit, self.batch_size):
+            end = min(start + self.batch_size, limit)
+            yield d_ep[start:end], s_ep[start:end], r_ep[start:end]
+
+
+def _make_index_loader(
+    pairs_with_rating: np.ndarray,
+    batch_size: int,
+    shuffle: bool,
+    device: Optional[torch.device] = None,
+) -> _FastIndexLoader:
+    return _FastIndexLoader(pairs_with_rating, batch_size=batch_size, shuffle=shuffle, device=device)
 
 
 def _attach_fast_convncf_forward(model: ConvNCF) -> None:
@@ -122,11 +173,11 @@ def _attach_fast_convncf_forward(model: ConvNCF) -> None:
     import torch.nn.functional as F
 
     def _fast_forward(self, drug_features, side_features, device):
-        x_drugs = F.relu(self.drugs_bn(self.drugs_layer(drug_features.to(device))), inplace=True)
+        x_drugs = F.relu(self.drugs_bn(self.drugs_layer(drug_features)), inplace=True)
         x_drugs = F.dropout(x_drugs, training=self.training, p=self.dropout1)
         x_drugs = self.drugs_layer_1(x_drugs)
 
-        x_sides = F.relu(self.sides_bn(self.sides_layer(side_features.to(device))), inplace=True)
+        x_sides = F.relu(self.sides_bn(self.sides_layer(side_features)), inplace=True)
         x_sides = F.dropout(x_sides, training=self.training, p=self.dropout1)
         x_sides = self.sides_layer_1(x_sides)
 
@@ -138,7 +189,7 @@ def _attach_fast_convncf_forward(model: ConvNCF) -> None:
             l1 = getattr(self, f'drug_layer{idx_d}')
             bn = getattr(self, f'drug{idx_d}_bn')
             l2 = getattr(self, f'drug_layer{idx_d}_1')
-            xd = F.relu(bn(l1(d_in.to(device))), inplace=True)
+            xd = F.relu(bn(l1(d_in)), inplace=True)
             xd = F.dropout(xd, training=self.training, p=self.dropout1)
             drugs.append(l2(xd))
 
@@ -147,7 +198,7 @@ def _attach_fast_convncf_forward(model: ConvNCF) -> None:
             l1 = getattr(self, f'side_layer{idx_s}')
             bn = getattr(self, f'side{idx_s}_bn')
             l2 = getattr(self, f'side_layer{idx_s}_1')
-            xs = F.relu(bn(l1(s_in.to(device))), inplace=True)
+            xs = F.relu(bn(l1(s_in)), inplace=True)
             xs = F.dropout(xs, training=self.training, p=self.dropout1)
             sides.append(l2(xs))
 
@@ -178,22 +229,25 @@ def _attach_fast_convncf_forward(model: ConvNCF) -> None:
 @torch.no_grad()
 def _predict_sdpred(
     model: ConvNCF,
-    loader: DataLoader,
+    loader: _FastIndexLoader,
     drug_mat_t: torch.Tensor,
     side_mat_t: torch.Tensor,
     device: torch.device,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Return `(y_true_ratings, pred_binary_scores, pred_freq_scores)`."""
     model.eval()
-    ratings_all, cls_all, reg_all = [], [], []
-    for batch_d, batch_s, batch_r in loader:
-        d_feat = drug_mat_t[batch_d.to(device)]
-        s_feat = side_mat_t[batch_s.to(device)]
+    cls_t, reg_t = [], []
+    for batch_d, batch_s, _ in loader:
+        b_d = batch_d.to(device) if batch_d.device != device else batch_d
+        b_s = batch_s.to(device) if batch_s.device != device else batch_s
+        d_feat = drug_mat_t[b_d]
+        s_feat = side_mat_t[b_s]
         scores_cls, scores_reg = model(d_feat, s_feat, device)
-        cls_all.append(np.atleast_1d(scores_cls.detach().cpu().numpy()).astype(np.float32))
-        reg_all.append(np.atleast_1d(scores_reg.detach().cpu().numpy()).astype(np.float32))
-        ratings_all.append(np.atleast_1d(batch_r.numpy()).astype(np.float32))
-    return np.concatenate(ratings_all), np.concatenate(cls_all), np.concatenate(reg_all)
+        cls_t.append(scores_cls.view(-1))
+        reg_t.append(scores_reg.view(-1))
+    cls_np = torch.cat(cls_t, dim=0).detach().cpu().numpy().astype(np.float32)
+    reg_np = torch.cat(reg_t, dim=0).detach().cpu().numpy().astype(np.float32)
+    return loader.r_cpu.copy(), cls_np, reg_np
 
 
 def run_sdpred_fold(
@@ -251,10 +305,10 @@ def run_sdpred_fold(
     eval_bs = int(cfg['eval_batch_size'])
     epochs = int(cfg['epochs'])
 
-    train_loader = _make_index_loader(train_combined, batch_size=batch_size, shuffle=True)
-    valsel_loader = _make_index_loader(fold_split.valsel, batch_size=eval_bs, shuffle=False)
-    test_pos_loader = _make_index_loader(fold_split.test, batch_size=eval_bs, shuffle=False)
-    test_neg_loader = _make_index_loader(neg_test, batch_size=eval_bs, shuffle=False)
+    train_loader = _make_index_loader(train_combined, batch_size=batch_size, shuffle=True, device=device)
+    valsel_loader = _make_index_loader(fold_split.valsel, batch_size=eval_bs, shuffle=False, device=device)
+    test_pos_loader = _make_index_loader(fold_split.test, batch_size=eval_bs, shuffle=False, device=device)
+    test_neg_loader = _make_index_loader(neg_test, batch_size=eval_bs, shuffle=False, device=device)
 
     drop = float(cfg['dropout'])
     model = ConvNCF(
@@ -279,14 +333,11 @@ def run_sdpred_fold(
 
     for epoch in range(1, epochs + 1):
         model.train()
-        running_loss = 0.0
+        running_loss_t = torch.zeros((), dtype=torch.float32, device=device)
         n_batches = 0
-        pos_tr_true, pos_tr_pred = [], []
+        pos_tr_true_t, pos_tr_pred_t = [], []
 
-        for batch_d, batch_s, batch_r in train_loader:
-            b_d_dev = batch_d.to(device)
-            b_s_dev = batch_s.to(device)
-            batch_r_dev = batch_r.to(device)
+        for b_d_dev, b_s_dev, batch_r_dev in train_loader:
             batch_lbl_dev = (batch_r_dev > 0).float()
             d_feat = drug_mat_t[b_d_dev]
             s_feat = side_mat_t[b_s_dev]
@@ -313,7 +364,7 @@ def run_sdpred_fold(
                 s_feat[:, 2 * N_SIDES:3 * N_SIDES] = s3_c
                 s_feat[:, 3 * N_SIDES:4 * N_SIDES] = s4_c
 
-            optimizer.zero_grad()
+            optimizer.zero_grad(set_to_none=True)
             logits, pred_reg = model(d_feat, s_feat, device)
             logits = logits.view(-1)
             pred_reg = pred_reg.view(-1)
@@ -323,19 +374,21 @@ def run_sdpred_fold(
             if pos_mask.any():
                 loss2 = reg_criterion(pred_reg[pos_mask], batch_r_dev[pos_mask])
                 total_loss = loss1 * loss2
-                pos_tr_true.append(batch_r_dev[pos_mask].detach().cpu().numpy())
-                pos_tr_pred.append(pred_reg[pos_mask].detach().cpu().numpy())
+                pos_tr_true_t.append(batch_r_dev[pos_mask].detach())
+                pos_tr_pred_t.append(pred_reg[pos_mask].detach())
             else:
                 total_loss = loss1
 
             total_loss.backward()
             optimizer.step()
 
-            running_loss += float(total_loss.item())
+            running_loss_t += total_loss.detach()
             n_batches += 1
 
+        running_loss = float(running_loss_t.item())
         tr_ep_metrics = eval_regression_predictions(
-            np.concatenate(pos_tr_true), np.concatenate(pos_tr_pred)
+            torch.cat(pos_tr_true_t, dim=0).cpu().numpy(),
+            torch.cat(pos_tr_pred_t, dim=0).cpu().numpy(),
         )
         tr_ep_f1 = float(tr_ep_metrics['MacroF1'])
 

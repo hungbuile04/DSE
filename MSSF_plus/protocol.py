@@ -64,12 +64,17 @@ def set_global_seed(seed: int = 42):
     if torch.cuda.is_available():
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
     if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
         torch.mps.manual_seed(seed)
 
 
 def get_device(prefer_device: Optional[str] = None) -> torch.device:
     """Select runtime device (CUDA -> MPS -> CPU, or explicit override)."""
+    if torch.cuda.is_available():
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
     if prefer_device:
         return torch.device(prefer_device)
     if torch.cuda.is_available():

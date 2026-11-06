@@ -66,7 +66,8 @@ def evaluate_loader(
       (metrics_dict, y_true_class_0_to_4, y_pred_class_0_to_4, probs_5class)
     """
     model.eval()
-    all_probs = []
+    all_probs_t = []
+    all_sigmas_t = []
     all_labels = []
     all_freqs = []
 
@@ -86,17 +87,24 @@ def evaluate_loader(
                 "CRITICAL: Evaluation pair found with non-zero entry in Y_train!"
             )
 
-        logits, _, _, _, _, _, _, _ = model(
+        logits, _, _, _, logvar, _, _, _ = model(
             drugs, sides, drug_avail=d_avail, se_avail=s_avail,
             fallback_d9=fb_d9, fallback_d10=fb_d10,
             drug_idx=d_idx, se_idx=s_idx,
         )
         probs = logits_to_probs(logits, loss_type=loss_type)
-        all_probs.append(probs.cpu().numpy())
-        all_labels.append(batch['label'].numpy())
+        all_probs_t.append(probs)
+        if logvar is not None:
+            all_sigmas_t.append(torch.exp(0.5 * logvar).mean(dim=1))
+        lbl_cpu = batch.get('label_cpu')
+        all_labels.append((lbl_cpu if lbl_cpu is not None else batch['label'].cpu()).numpy())
         all_freqs.append(batch['freq'].numpy())
 
-    probs_arr = np.vstack(all_probs).astype(np.float32)
+    probs_arr = torch.cat(all_probs_t, dim=0).cpu().numpy().astype(np.float32)
+    if all_sigmas_t and len(all_sigmas_t) == len(all_probs_t):
+        model._last_eval_sigma = torch.cat(all_sigmas_t, dim=0).cpu().numpy().astype(np.float32)
+    else:
+        model._last_eval_sigma = None
     y_true_class = np.concatenate(all_labels).astype(np.int64)
     freqs_arr = np.concatenate(all_freqs).astype(np.float32)
     y_pred_class = np.argmax(probs_arr, axis=1).astype(np.int64)
@@ -240,9 +248,9 @@ def run_single_fold(
     t_train0 = time.time()
     set_global_seed(fold_seed)
 
-    # 4. Build DataLoaders
+    # 4. Build DataLoaders (staging compact entity lookup tables on device)
     train_loader, valsel_loader, valcal_loader, test_loader = build_dataloaders(
-        fold_split, fold_views, soft_res, cfg
+        fold_split, fold_views, soft_res, cfg, device=device
     )
 
     # 5. Initialize model, loss criterion, and optimizer
@@ -283,9 +291,9 @@ def run_single_fold(
 
     for epoch in range(1, epochs + 1):
         model.train()
-        running_loss = 0.0
+        running_loss_t = torch.zeros((), dtype=torch.float32, device=device)
         n_batches = 0
-        epoch_train_preds = []
+        epoch_train_preds_t = []
         epoch_train_labels = []
 
         for batch in train_loader:
@@ -328,14 +336,16 @@ def run_single_fold(
 
             with torch.no_grad():
                 b_probs = logits_to_probs(logits.detach(), loss_type=loss_type)
-                epoch_train_preds.append(torch.argmax(b_probs, dim=-1).cpu().numpy())
-                epoch_train_labels.append(batch['label'].numpy())
+                epoch_train_preds_t.append(torch.argmax(b_probs, dim=-1))
+                lbl_cpu = batch.get('label_cpu')
+                epoch_train_labels.append((lbl_cpu if lbl_cpu is not None else batch['label'].cpu()).numpy())
+                running_loss_t += loss.detach()
 
-            running_loss += float(loss.item())
             n_batches += 1
 
+        running_loss = float(running_loss_t.item())
         tr_y_true = np.concatenate(epoch_train_labels).astype(np.int64)
-        tr_y_pred = np.concatenate(epoch_train_preds).astype(np.int64)
+        tr_y_pred = torch.cat(epoch_train_preds_t, dim=0).cpu().numpy().astype(np.int64)
         train_ep_metrics = compute_multiclass_metrics(tr_y_true, tr_y_pred)
         train_ep_macro_f1 = float(train_ep_metrics['MacroF1'])
 
@@ -377,6 +387,7 @@ def run_single_fold(
         model, train_eval_loader, loss_type=loss_type, device=device,
         expected_pairs=fold_split.train, allow_train_pairs=True,
     )
+    train_sigma_cached = getattr(model, '_last_eval_sigma', None)
     best_train_loop_macro_f1 = float(best_train_macro_f1)
     best_train_macro_f1 = float(train_eval_final['MacroF1'])
 
@@ -385,6 +396,7 @@ def run_single_fold(
         model, valsel_loader, loss_type=loss_type, device=device,
         expected_pairs=fold_split.valsel
     )
+    valsel_sigma_cached = getattr(model, '_last_eval_sigma', None)
     _, valcal_true_c, _, valcal_probs = evaluate_loader(
         model, valcal_loader, loss_type=loss_type, device=device,
         expected_pairs=fold_split.valcal
@@ -415,8 +427,16 @@ def run_single_fold(
     bvi_diagnostics = None
     if getattr(model, 'use_bvi', True):
         import scipy.stats as sp_stats
-        valsel_sigma = compute_loader_sigma(model, valsel_loader, device=device, mask_d9d10=False)
-        train_sigma = compute_loader_sigma(model, train_eval_loader, device=device, mask_d9d10=False)
+        valsel_sigma = (
+            valsel_sigma_cached
+            if valsel_sigma_cached is not None
+            else compute_loader_sigma(model, valsel_loader, device=device, mask_d9d10=False)
+        )
+        train_sigma = (
+            train_sigma_cached
+            if train_sigma_cached is not None
+            else compute_loader_sigma(model, train_eval_loader, device=device, mask_d9d10=False)
+        )
         if valsel_sigma is not None:
             np.save(os.path.join(method_dir, f'fold_{fold}_sigma.npy'), valsel_sigma.astype(np.float32))
             if train_sigma is not None:

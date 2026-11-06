@@ -169,35 +169,180 @@ def _identify_sub_train_only(
     return se_sub_index, se_sub_mask
 
 
-def _make_pair_loader(pairs_with_rating: np.ndarray, batch_size: int, shuffle: bool) -> DataLoader:
-    d = torch.tensor(pairs_with_rating[:, 0].astype(np.int64), dtype=torch.long)
-    s = torch.tensor(pairs_with_rating[:, 1].astype(np.int64), dtype=torch.long)
-    r = torch.tensor(pairs_with_rating[:, 2].astype(np.float32), dtype=torch.float32)
-    ds = TensorDataset(d, s, r)
-    drop_last = bool(shuffle and (len(ds) > batch_size) and (len(ds) % batch_size == 1))
-    return DataLoader(ds, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last)
+class _FastPairLoader:
+    """Vectorized tensor batch loader avoiding 59,666 per-sample Python __getitem__ calls per epoch."""
+
+    def __init__(
+        self,
+        pairs_with_rating: np.ndarray,
+        batch_size: int,
+        shuffle: bool,
+        device: Optional[torch.device] = None,
+    ):
+        self.n = int(len(pairs_with_rating))
+        self.batch_size = int(batch_size)
+        self.shuffle = bool(shuffle)
+        self.drop_last = bool(shuffle and (self.n > self.batch_size) and (self.n % self.batch_size == 1))
+        self.device = device
+        d_np = pairs_with_rating[:, 0].astype(np.int64)
+        s_np = pairs_with_rating[:, 1].astype(np.int64)
+        r_np = pairs_with_rating[:, 2].astype(np.float32)
+        self.r_cpu = r_np
+        if device is not None and device.type != 'cpu':
+            self.d = torch.tensor(d_np, dtype=torch.long, device=device)
+            self.s = torch.tensor(s_np, dtype=torch.long, device=device)
+            self.r = torch.tensor(r_np, dtype=torch.float32, device=device)
+        else:
+            self.d = torch.tensor(d_np, dtype=torch.long)
+            self.s = torch.tensor(s_np, dtype=torch.long)
+            self.r = torch.tensor(r_np, dtype=torch.float32)
+
+    def __len__(self) -> int:
+        if self.drop_last:
+            return self.n // self.batch_size
+        return (self.n + self.batch_size - 1) // self.batch_size
+
+    def __iter__(self):
+        if self.shuffle:
+            perm_cpu = torch.randperm(self.n)
+            perm = perm_cpu.to(self.d.device) if self.d.device.type != 'cpu' else perm_cpu
+            d_ep = self.d[perm]
+            s_ep = self.s[perm]
+            r_ep = self.r[perm]
+        else:
+            d_ep = self.d
+            s_ep = self.s
+            r_ep = self.r
+
+        limit = (self.n // self.batch_size) * self.batch_size if self.drop_last else self.n
+        for start in range(0, limit, self.batch_size):
+            end = min(start + self.batch_size, limit)
+            yield d_ep[start:end], s_ep[start:end], r_ep[start:end]
+
+
+def _make_pair_loader(
+    pairs_with_rating: np.ndarray,
+    batch_size: int,
+    shuffle: bool,
+    device: Optional[torch.device] = None,
+) -> _FastPairLoader:
+    return _FastPairLoader(pairs_with_rating, batch_size=batch_size, shuffle=shuffle, device=device)
+
+
+def _attach_fast_hstrans_forward(model: torch.nn.Module) -> None:
+    """
+    Replace the `(B, 50, 50, 200)` 4D `.repeat()` outer-product + sum in `HSTrans/Net.py` L110-117
+    with its exact mathematical identity `torch.bmm(x_d, x_e.transpose(1, 2)).unsqueeze(1)`,
+    eliminating 200x intermediate memory traffic.
+    """
+    import types
+    import torch.nn.functional as F
+
+    def _fast_forward(self, Drug, SE, DrugMask, SEMsak):
+        batch = int(Drug.size(0))
+        Drug = Drug.long().to(self.device)
+        DrugMask = DrugMask.long().to(self.device).unsqueeze(1).unsqueeze(2)
+        DrugMask = (1.0 - DrugMask) * -10000.0
+        emb = self.embDrug(Drug)
+        x_d = self.encoderDrug(emb.float(), DrugMask.float(), False)
+
+        SE = SE.long().to(self.device)
+        SEMsak = SEMsak.long().to(self.device).unsqueeze(1).unsqueeze(2)
+        SEMsak = (1.0 - SEMsak) * -10000.0
+        embE = self.embSide(SE)
+        x_e = self.encoderSide(embE.float(), SEMsak.float(), False)
+
+        if self.CrossAttention:
+            x_d, x_e = self.crossAttentionencoder([x_d.float(), x_e.float()], DrugMask.float(), True)
+
+        i_v = torch.bmm(x_d, x_e.transpose(1, 2)).unsqueeze(1)
+        i_v = F.dropout(i_v, p=self.dropout, training=self.training)
+        f = self.icnn(i_v).view(batch, -1)
+        score = self.decoder(f)
+        return score, Drug, SE
+
+    model.forward = types.MethodType(_fast_forward, model)
+
+
+@torch.no_grad()
+def _encode_all_hstrans_entities(
+    model: torch.nn.Module,
+    drug_tokens_t: torch.Tensor,
+    drug_masks_t: torch.Tensor,
+    se_tokens_t: torch.Tensor,
+    se_masks_t: torch.Tensor,
+    chunk_size: int = 256,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    In `model.eval()` mode (when `CrossAttention=False`), pre-encode all 750 drugs and
+    all 994 side effects once through the 8-layer Transformers (`encoderDrug`, `encoderSide`).
+    """
+    model.eval()
+    d_chunks = []
+    for st in range(0, drug_tokens_t.size(0), chunk_size):
+        ed = min(st + chunk_size, drug_tokens_t.size(0))
+        dt = drug_tokens_t[st:ed]
+        dm = (1.0 - drug_masks_t[st:ed].unsqueeze(1).unsqueeze(2).float()) * -10000.0
+        emb_d = model.embDrug(dt)
+        d_chunks.append(model.encoderDrug(emb_d.float(), dm, False))
+    all_x_d = torch.cat(d_chunks, dim=0)
+
+    s_chunks = []
+    for st in range(0, se_tokens_t.size(0), chunk_size):
+        ed = min(st + chunk_size, se_tokens_t.size(0))
+        st_tok = se_tokens_t[st:ed]
+        sm = (1.0 - se_masks_t[st:ed].unsqueeze(1).unsqueeze(2).float()) * -10000.0
+        emb_s = model.embSide(st_tok)
+        s_chunks.append(model.encoderSide(emb_s.float(), sm, False))
+    all_x_e = torch.cat(s_chunks, dim=0)
+    return all_x_d, all_x_e
 
 
 @torch.no_grad()
 def _predict_hstrans(
     model: torch.nn.Module,
-    loader: DataLoader,
+    loader: _FastPairLoader,
     drug_tokens_t: torch.Tensor,
     drug_masks_t: torch.Tensor,
     se_tokens_t: torch.Tensor,
     se_masks_t: torch.Tensor,
     device: torch.device,
+    precomputed_entities: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
+    import torch.nn.functional as F
     model.eval()
+    if not getattr(model, 'CrossAttention', False):
+        if precomputed_entities is None:
+            all_x_d, all_x_e = _encode_all_hstrans_entities(
+                model, drug_tokens_t, drug_masks_t, se_tokens_t, se_masks_t
+            )
+        else:
+            all_x_d, all_x_e = precomputed_entities
+        preds_t = []
+        for batch_d, batch_s, _ in loader:
+            b_d = batch_d.to(device) if batch_d.device != device else batch_d
+            b_s = batch_s.to(device) if batch_s.device != device else batch_s
+            x_d = all_x_d[b_d]
+            x_e = all_x_e[b_s]
+            i_v = torch.bmm(x_d, x_e.transpose(1, 2)).unsqueeze(1)
+            i_v = F.dropout(i_v, p=model.dropout, training=False)
+            f = model.icnn(i_v).view(int(b_d.size(0)), -1)
+            out = model.decoder(f).view(-1)
+            preds_t.append(out)
+        preds_np = torch.cat(preds_t, dim=0).detach().cpu().numpy().astype(np.float32)
+        return loader.r_cpu.copy(), preds_np
+
     labels_all, preds_all = [], []
     for batch_d, batch_s, batch_r in loader:
-        d_tok = drug_tokens_t[batch_d.to(device)]
-        d_msk = drug_masks_t[batch_d.to(device)]
-        s_tok = se_tokens_t[batch_s.to(device)]
-        s_msk = se_masks_t[batch_s.to(device)]
+        b_d = batch_d.to(device) if batch_d.device != device else batch_d
+        b_s = batch_s.to(device) if batch_s.device != device else batch_s
+        d_tok = drug_tokens_t[b_d]
+        d_msk = drug_masks_t[b_d]
+        s_tok = se_tokens_t[b_s]
+        s_msk = se_masks_t[b_s]
         out, _, _ = model(d_tok, s_tok, d_msk, s_msk)
         preds_all.append(np.atleast_1d(out.view(-1).detach().cpu().numpy()).astype(np.float32))
-        labels_all.append(np.atleast_1d(batch_r.numpy()).astype(np.float32))
+        labels_all.append(np.atleast_1d(batch_r.detach().cpu().numpy()).astype(np.float32))
     return np.concatenate(labels_all), np.concatenate(preds_all)
 
 
@@ -241,19 +386,26 @@ def run_hstrans_fold(
     neg_test = np.column_stack([neg_test_xy, np.zeros(len(neg_test_xy), dtype=np.float32)])
 
     batch_size = int(cfg['batch_size'])
-    eval_bs = int(cfg['eval_batch_size'])
+    eval_bs = max(int(cfg['eval_batch_size']), 1024)
     epochs = int(cfg['epochs'])
     eval_every = max(1, int(cfg['eval_every']))
 
-    train_loader = _make_pair_loader(train_combined, batch_size=batch_size, shuffle=True)
-    valsel_loader = _make_pair_loader(fold_split.valsel, batch_size=eval_bs, shuffle=False)
-    test_pos_loader = _make_pair_loader(fold_split.test, batch_size=eval_bs, shuffle=False)
-    test_neg_loader = _make_pair_loader(neg_test, batch_size=eval_bs, shuffle=False)
+    train_loader = _make_pair_loader(train_combined, batch_size=batch_size, shuffle=True, device=device)
+    valsel_loader = _make_pair_loader(fold_split.valsel, batch_size=eval_bs, shuffle=False, device=device)
+    test_pos_loader = _make_pair_loader(fold_split.test, batch_size=eval_bs, shuffle=False, device=device)
+    test_neg_loader = _make_pair_loader(neg_test, batch_size=eval_bs, shuffle=False, device=device)
 
     model = TransCls().to(device)
     model.device = device
+    _attach_fast_hstrans_forward(model)
     optimizer = torch.optim.Adam(
         model.parameters(), lr=float(cfg['lr']), weight_decay=float(cfg['weight_decay'])
+    )
+
+    use_bf16 = bool(
+        device.type == 'cuda'
+        and hasattr(torch.cuda, 'is_bf16_supported')
+        and torch.cuda.is_bf16_supported()
     )
 
     best_f1 = -float('inf')
@@ -266,30 +418,35 @@ def run_hstrans_fold(
     best_rmse_state = copy.deepcopy(model.state_dict())
 
     eval_test = bool(cfg.get('eval_test', False))
-    train_pos_loader = _make_pair_loader(fold_split.train, batch_size=eval_bs, shuffle=False)
+    train_pos_loader = _make_pair_loader(fold_split.train, batch_size=eval_bs, shuffle=False, device=device)
 
     for epoch in range(1, epochs + 1):
         model.train()
-        running_loss = 0.0
+        running_loss_t = torch.zeros((), dtype=torch.float32, device=device)
         n_batches = 0
 
-        for batch_d, batch_s, batch_r in train_loader:
-            d_tok = drug_tokens_t[batch_d.to(device)]
-            d_msk = drug_masks_t[batch_d.to(device)]
-            s_tok = se_tokens_t[batch_s.to(device)]
-            s_msk = se_masks_t[batch_s.to(device)]
-            target = batch_r.to(device)
+        for batch_d, batch_s, target in train_loader:
+            d_tok = drug_tokens_t[batch_d]
+            d_msk = drug_masks_t[batch_d]
+            s_tok = se_tokens_t[batch_s]
+            s_msk = se_masks_t[batch_s]
 
-            optimizer.zero_grad()
-            out, _, _ = model(d_tok, s_tok, d_msk, s_msk)
-            loss = torch.sum((out.view(-1) - target) ** 2)
+            optimizer.zero_grad(set_to_none=True)
+            if use_bf16:
+                with torch.amp.autocast('cuda', dtype=torch.bfloat16):
+                    out, _, _ = model(d_tok, s_tok, d_msk, s_msk)
+                    loss = torch.sum((out.float().view(-1) - target) ** 2)
+            else:
+                out, _, _ = model(d_tok, s_tok, d_msk, s_msk)
+                loss = torch.sum((out.view(-1) - target) ** 2)
             loss.backward()
             optimizer.step()
 
-            running_loss += float(loss.item())
+            running_loss_t += loss.detach()
             n_batches += 1
 
         if epoch == 1 or epoch % eval_every == 0 or epoch == epochs:
+            running_loss = float(running_loss_t.item())
             val_y, val_p = _predict_hstrans(
                 model, valsel_loader, drug_tokens_t, drug_masks_t, se_tokens_t, se_masks_t, device
             )
@@ -315,14 +472,19 @@ def run_hstrans_fold(
 
     # 1. Primary evaluation (MacroF1-selected checkpoint)
     model.load_state_dict(best_f1_state)
+    best_f1_entities = _encode_all_hstrans_entities(
+        model, drug_tokens_t, drug_masks_t, se_tokens_t, se_masks_t
+    )
     tr_y, tr_p_f1 = _predict_hstrans(
-        model, train_pos_loader, drug_tokens_t, drug_masks_t, se_tokens_t, se_masks_t, device
+        model, train_pos_loader, drug_tokens_t, drug_masks_t, se_tokens_t, se_masks_t, device,
+        precomputed_entities=best_f1_entities,
     )
     train_eval_metrics = eval_regression_predictions(tr_y, tr_p_f1)
     best_train_macro_f1 = float(train_eval_metrics['MacroF1'])
 
     val_y, val_p_f1 = _predict_hstrans(
-        model, valsel_loader, drug_tokens_t, drug_masks_t, se_tokens_t, se_masks_t, device
+        model, valsel_loader, drug_tokens_t, drug_masks_t, se_tokens_t, se_masks_t, device,
+        precomputed_entities=best_f1_entities,
     )
     assert np.array_equal(np.round(val_y), np.round(fold_split.valsel[:, 2]))
     valsel_final = eval_regression_predictions(val_y, val_p_f1)
@@ -340,10 +502,12 @@ def run_hstrans_fold(
     if eval_test:
         model.load_state_dict(best_f1_state)
         test_y, test_p_f1 = _predict_hstrans(
-            model, test_pos_loader, drug_tokens_t, drug_masks_t, se_tokens_t, se_masks_t, device
+            model, test_pos_loader, drug_tokens_t, drug_masks_t, se_tokens_t, se_masks_t, device,
+            precomputed_entities=best_f1_entities,
         )
         _, test_p_neg = _predict_hstrans(
-            model, test_neg_loader, drug_tokens_t, drug_masks_t, se_tokens_t, se_masks_t, device
+            model, test_neg_loader, drug_tokens_t, drug_masks_t, se_tokens_t, se_masks_t, device,
+            precomputed_entities=best_f1_entities,
         )
         assert np.array_equal(np.round(test_y), np.round(fold_split.test[:, 2]))
 

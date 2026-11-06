@@ -59,15 +59,16 @@ from utils.encoder import encoder  # noqa: E402
 
 class _SelfCorrectingAggregator(aggregator):
     """
-    Extension of `MGPred`'s `aggregator` supporting `profile_self_correction`:
+    GPU-vectorized extension of `MGPred`'s `aggregator` supporting `profile_self_correction`:
+      - Replaces the 128-iteration Python `for` loop and CPU `heapq` reservoir sampling per batch
+        with batched GPU Efraimidis-Spirakis sampling (`k = u ** (1/w)` + `torch.topk`) and
+        batched attention over `(B, <=24, embed_dim)`.
       - When `profile_self_correction=True` and a batch sample `(d = nodes_u[b], s = nodes_i[b])`
         belongs to `Y_train` (`y_train_mat[d, s] > 0`):
-        1. Target edge `(d, s)` is removed from `u_adj[d]` (for drug aggregators) and `(s, d)`
-           is removed from `i_adj[s]` (for SE aggregators).
-        2. If `is_interaction_view=True` (`u_agg1` / `i_agg1`, where initial features are
-           rows of `Y_train` and `Y_train.T`), position `s` in drug `d`'s initial feature vector
-           `u2e1[d, :]` (and position `d` in SE `s`'s initial feature vector `i2e1[s, :]`)
-           is set to `0.0`.
+        1. Target edge `(d, s)` is masked out of `u_adj[d]` (for drug aggregators) and `(s, d)`
+           is masked out of `i_adj[s]` (for SE aggregators).
+        2. If `is_interaction_view=True` (`u_agg1` / `i_agg1`), entry `(d, s)` in `u2e1[d, :]`
+           (and `(s, d)` in `i2e1[s, :]`) is masked to `0.0`.
       - For `val_select`, `val_calib`, and `test` pairs (`y_train_mat[d, s] == 0`), features and
         adjacency lists are 100% unchanged.
     """
@@ -94,84 +95,92 @@ class _SelfCorrectingAggregator(aggregator):
         self.is_interaction_view = bool(is_interaction_view)
         self.y_train_mat = y_train_mat
 
+        n_nodes = int(self.drugfeature.num_embeddings if self.is_drug else self.sidefeature.num_embeddings)
+        max_deg = max((len(v) for v in adj.values()), default=1)
+        adj_ids = np.zeros((n_nodes, max_deg), dtype=np.int64)
+        adj_inv_w = np.zeros((n_nodes, max_deg), dtype=np.float32)
+        adj_valid = np.zeros((n_nodes, max_deg), dtype=bool)
+        for node_id, nbr_list in adj.items():
+            for j, (nbr_id, w) in enumerate(nbr_list):
+                adj_ids[int(node_id), j] = int(nbr_id)
+                adj_inv_w[int(node_id), j] = 1.0 / float(max(w, 1e-6))
+                adj_valid[int(node_id), j] = True
+
+        self._adj_ids_t = torch.tensor(adj_ids, dtype=torch.long, device=self.device)
+        self._adj_inv_w_t = torch.tensor(adj_inv_w, dtype=torch.float32, device=self.device)
+        self._adj_valid_t = torch.tensor(adj_valid, dtype=torch.bool, device=self.device)
+        if y_train_mat is not None:
+            self._y_train_bool_t = torch.tensor(y_train_mat > 0.0, dtype=torch.bool, device=self.device)
+        else:
+            self._y_train_bool_t = None
+
     def forward_pair_aware(
         self,
         nodes_u: torch.Tensor,
         nodes_i: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        bsz = int(nodes_u.shape[0])
-        u_np = nodes_u.detach().cpu().numpy().astype(int)
-        i_np = nodes_i.detach().cpu().numpy().astype(int)
-        threshold = 24
+        import torch.nn.functional as F
 
-        if self.profile_self_correction and self.y_train_mat is not None:
-            is_train_pair = (self.y_train_mat[u_np, i_np] > 0.0)
+        nodes_u = nodes_u.to(self.device) if nodes_u.device != self.device else nodes_u
+        nodes_i = nodes_i.to(self.device) if nodes_i.device != self.device else nodes_i
+
+        if self.profile_self_correction and self._y_train_bool_t is not None:
+            sc_mask = self._y_train_bool_t[nodes_u, nodes_i]
+            has_sc = bool(sc_mask.any().item())
         else:
-            is_train_pair = np.zeros(bsz, dtype=bool)
+            sc_mask = None
+            has_sc = False
 
         if self.is_drug:
             u_raw = self.drugfeature.weight[nodes_u]
-            if self.is_interaction_view and np.any(is_train_pair):
+            if self.is_interaction_view and has_sc:
                 u_raw = u_raw.clone()
-                b_pos = torch.as_tensor(np.where(is_train_pair)[0], dtype=torch.long, device=self.device)
+                b_pos = torch.nonzero(sc_mask, as_tuple=False).squeeze(1)
                 u_raw[b_pos, nodes_i[b_pos]] = 0.0
-            nodes_fea = self.u_layer(u_raw).to(self.device)
+            nodes_fea = self.u_layer(u_raw)
+            center_ids = nodes_u
+            partner_ids = nodes_i
         else:
             i_raw = self.sidefeature.weight[nodes_i]
-            if self.is_interaction_view and np.any(is_train_pair):
+            if self.is_interaction_view and has_sc:
                 i_raw = i_raw.clone()
-                b_pos = torch.as_tensor(np.where(is_train_pair)[0], dtype=torch.long, device=self.device)
+                b_pos = torch.nonzero(sc_mask, as_tuple=False).squeeze(1)
                 i_raw[b_pos, nodes_u[b_pos]] = 0.0
-            nodes_fea = self.i_layer(i_raw).to(self.device)
+            nodes_fea = self.i_layer(i_raw)
+            center_ids = nodes_i
+            partner_ids = nodes_u
 
-        neigh_embed = torch.empty((bsz, self.embed_dim), dtype=torch.float32, device=self.device)
+        nbr_ids = self._adj_ids_t[center_ids]
+        inv_w = self._adj_inv_w_t[center_ids]
+        valid = self._adj_valid_t[center_ids]
+        if has_sc:
+            valid = valid & (~(sc_mask.unsqueeze(1) & (nbr_ids == partner_ids.unsqueeze(1))))
 
-        for b in range(bsz):
-            u_id = int(u_np[b])
-            i_id = int(i_np[b])
-            sc_active = bool(is_train_pair[b])
+        k_sel = min(24, int(nbr_ids.size(1)))
+        u_rand = torch.empty_like(inv_w).uniform_(1e-6, 1.0 - 1e-6)
+        keys = torch.where(valid, u_rand.pow(inv_w), torch.full_like(inv_w, -1.0))
+        top_keys, top_pos = torch.topk(keys, k=k_sel, dim=1)
+        top_valid = top_keys > 0.0
+        top_nbr_ids = torch.gather(nbr_ids, 1, top_pos)
 
-            if self.is_drug:
-                raw_single = self.drugfeature.weight[nodes_u[b:b + 1]]
-                if self.is_interaction_view and sc_active:
-                    raw_single = raw_single.clone()
-                    raw_single[0, i_id] = 0.0
-                node_feature = self.u_layer(raw_single).to(self.device)
-                interactions = self.adj.get(u_id, [])
-                if sc_active and interactions:
-                    interactions = [item for item in interactions if item[0] != i_id]
-            else:
-                raw_single = self.sidefeature.weight[nodes_i[b:b + 1]]
-                if self.is_interaction_view and sc_active:
-                    raw_single = raw_single.clone()
-                    raw_single[0, u_id] = 0.0
-                node_feature = self.i_layer(raw_single).to(self.device)
-                interactions = self.adj.get(i_id, [])
-                if sc_active and interactions:
-                    interactions = [item for item in interactions if item[0] != u_id]
+        if self.is_drug:
+            all_nbr_emb = self.i_layer(self.sidefeature.weight)
+        else:
+            all_nbr_emb = self.u_layer(self.drugfeature.weight)
+        neighs_feature = all_nbr_emb[top_nbr_ids]
 
-            n = len(interactions)
-            if n == 0:
-                neigh_embed[b] = node_feature[0]
-                continue
+        node_rep = nodes_fea.unsqueeze(1).expand(-1, k_sel, -1)
+        att_in = torch.cat((neighs_feature, node_rep), dim=-1)
+        att_h = F.relu(self.att.att1(att_in), inplace=True)
+        att_h = F.dropout(att_h, training=self.training, p=self.droprate)
+        att_logits = self.att.att2(att_h).squeeze(-1)
+        att_logits = att_logits.masked_fill(~top_valid, -1e9)
+        att_w = F.softmax(att_logits, dim=1).unsqueeze(-1)
+        att_w = torch.where(top_valid.unsqueeze(-1), att_w, torch.zeros_like(att_w))
+        neigh_embed = (neighs_feature * att_w).sum(dim=1)
 
-            if n < threshold:
-                sel_ids = [item[0] for item in interactions]
-                times = n
-            else:
-                sel_ids = a_res(interactions, threshold)
-                times = threshold
-
-            sel_t = torch.as_tensor(sel_ids, dtype=torch.long, device=self.device)
-            if self.is_drug:
-                neighs_feature = self.i_layer(self.sidefeature.weight[sel_t]).to(self.device)
-            else:
-                neighs_feature = self.u_layer(self.drugfeature.weight[sel_t]).to(self.device)
-
-            att_w = self.att(neighs_feature, node_feature, times)
-            embedding = torch.mm(neighs_feature.t(), att_w)
-            neigh_embed[b] = embedding.t()[0]
-
+        has_any_nbr = top_valid[:, 0].unsqueeze(-1)
+        neigh_embed = torch.where(has_any_nbr, neigh_embed, nodes_fea)
         return nodes_fea, neigh_embed
 
 
@@ -180,11 +189,9 @@ class _SelfCorrectingEncoder(encoder):
         super().__init__(embedding_dim, agg, cuda=cuda, is_user_part=is_user_part)
 
     def forward(self, nodes_u: torch.Tensor, nodes_i: torch.Tensor) -> torch.Tensor:
-        if getattr(self.aggregator, 'profile_self_correction', False):
-            nodes_fea, neigh_embed = self.aggregator.forward_pair_aware(nodes_u, nodes_i)
-            combined = torch.cat((nodes_fea, neigh_embed), dim=1)
-            return self.layer(combined).to(self.device)
-        return super().forward(nodes_u, nodes_i)
+        nodes_fea, neigh_embed = self.aggregator.forward_pair_aware(nodes_u, nodes_i)
+        combined = torch.cat((nodes_fea, neigh_embed), dim=1)
+        return self.layer(combined)
 
 
 def _load_mgpred_static_features() -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -322,19 +329,70 @@ def _build_mgpred_model_for_fold(
     return model
 
 
-def _make_pair_loader(pairs: np.ndarray, batch_size: int, shuffle: bool) -> DataLoader:
-    u = torch.tensor(pairs[:, 0].astype(np.int64), dtype=torch.long)
-    i = torch.tensor(pairs[:, 1].astype(np.int64), dtype=torch.long)
-    r = torch.tensor(pairs[:, 2].astype(np.float32), dtype=torch.float32)
-    ds = TensorDataset(u, i, r)
-    drop_last = bool(shuffle and (len(ds) > batch_size) and (len(ds) % batch_size == 1))
-    return DataLoader(ds, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last)
+class _FastPairLoader:
+    """Vectorized tensor batch loader avoiding per-sample Python __getitem__ overhead."""
+
+    def __init__(
+        self,
+        pairs: np.ndarray,
+        batch_size: int,
+        shuffle: bool,
+        device: Optional[torch.device] = None,
+    ):
+        self.n = int(len(pairs))
+        self.batch_size = int(batch_size)
+        self.shuffle = bool(shuffle)
+        self.drop_last = bool(shuffle and (self.n > self.batch_size) and (self.n % self.batch_size == 1))
+        self.device = device
+        u_np = pairs[:, 0].astype(np.int64)
+        i_np = pairs[:, 1].astype(np.int64)
+        r_np = pairs[:, 2].astype(np.float32)
+        self.r_cpu = r_np
+        if device is not None and device.type != 'cpu':
+            self.u = torch.tensor(u_np, dtype=torch.long, device=device)
+            self.i = torch.tensor(i_np, dtype=torch.long, device=device)
+            self.r = torch.tensor(r_np, dtype=torch.float32, device=device)
+        else:
+            self.u = torch.tensor(u_np, dtype=torch.long)
+            self.i = torch.tensor(i_np, dtype=torch.long)
+            self.r = torch.tensor(r_np, dtype=torch.float32)
+
+    def __len__(self) -> int:
+        if self.drop_last:
+            return self.n // self.batch_size
+        return (self.n + self.batch_size - 1) // self.batch_size
+
+    def __iter__(self):
+        if self.shuffle:
+            perm_cpu = torch.randperm(self.n)
+            perm = perm_cpu.to(self.u.device) if self.u.device.type != 'cpu' else perm_cpu
+            u_ep = self.u[perm]
+            i_ep = self.i[perm]
+            r_ep = self.r[perm]
+        else:
+            u_ep = self.u
+            i_ep = self.i
+            r_ep = self.r
+
+        limit = (self.n // self.batch_size) * self.batch_size if self.drop_last else self.n
+        for start in range(0, limit, self.batch_size):
+            end = min(start + self.batch_size, limit)
+            yield u_ep[start:end], i_ep[start:end], r_ep[start:end]
+
+
+def _make_pair_loader(
+    pairs: np.ndarray,
+    batch_size: int,
+    shuffle: bool,
+    device: Optional[torch.device] = None,
+) -> _FastPairLoader:
+    return _FastPairLoader(pairs, batch_size=batch_size, shuffle=shuffle, device=device)
 
 
 @torch.no_grad()
 def _predict_mgpred(
     model: MGPred,
-    loader: DataLoader,
+    loader: _FastPairLoader,
     device: torch.device,
     use_ema: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray, Optional[dict]]:
@@ -345,19 +403,20 @@ def _predict_mgpred(
         old_params = model.get_params()
         model.load_ema_params()
 
-    preds_list = []
-    labels_list = []
-    for batch_u, batch_i, batch_r in loader:
-        scores = model(batch_u.to(device), batch_i.to(device))
-        preds_list.append(np.atleast_1d(scores.detach().cpu().numpy()).astype(np.float32))
-        labels_list.append(np.atleast_1d(batch_r.numpy()).astype(np.float32))
+    preds_t = []
+    for batch_u, batch_i, _ in loader:
+        b_u = batch_u.to(device) if batch_u.device != device else batch_u
+        b_i = batch_i.to(device) if batch_i.device != device else batch_i
+        scores = model(b_u, b_i).view(-1)
+        preds_t.append(scores)
 
+    preds_np = torch.cat(preds_t, dim=0).detach().cpu().numpy().astype(np.float32)
     ema_state = copy.deepcopy(model.state_dict())
 
     if old_params is not None:
         model.load_params(old_params)
 
-    return np.concatenate(labels_list), np.concatenate(preds_list), ema_state
+    return loader.r_cpu.copy(), preds_np, ema_state
 
 
 def run_mgpred_fold(
@@ -381,14 +440,14 @@ def run_mgpred_fold(
     optimizer = torch.optim.Adam(model.parameters(), lr=float(cfg['lr']))
 
     batch_size = int(cfg['batch_size'])
-    eval_bs = int(cfg['eval_batch_size'])
+    eval_bs = max(int(cfg['eval_batch_size']), 1024)
     epochs = int(cfg['epochs'])
     eval_every = max(1, int(cfg['eval_every']))
 
-    train_loader = _make_pair_loader(fold_split.train, batch_size=batch_size, shuffle=True)
-    train_eval_loader = _make_pair_loader(fold_split.train, batch_size=eval_bs, shuffle=False)
-    valsel_loader = _make_pair_loader(fold_split.valsel, batch_size=eval_bs, shuffle=False)
-    test_loader = _make_pair_loader(fold_split.test, batch_size=eval_bs, shuffle=False)
+    train_loader = _make_pair_loader(fold_split.train, batch_size=batch_size, shuffle=True, device=device)
+    train_eval_loader = _make_pair_loader(fold_split.train, batch_size=eval_bs, shuffle=False, device=device)
+    valsel_loader = _make_pair_loader(fold_split.valsel, batch_size=eval_bs, shuffle=False, device=device)
+    test_loader = _make_pair_loader(fold_split.test, batch_size=eval_bs, shuffle=False, device=device)
 
     best_f1 = -float('inf')
     best_f1_epoch = 1
@@ -401,12 +460,12 @@ def run_mgpred_fold(
 
     for epoch in range(1, epochs + 1):
         model.train()
-        running_loss = 0.0
+        running_loss_t = torch.zeros((), dtype=torch.float32, device=device)
         n_batches = 0
 
         for batch_u, batch_i, batch_r in train_loader:
-            optimizer.zero_grad()
-            loss = model.loss(batch_u.to(device), batch_i.to(device), batch_r.to(device))
+            optimizer.zero_grad(set_to_none=True)
+            loss = model.loss(batch_u, batch_i, batch_r)
             loss.backward()
             optimizer.step()
 
@@ -415,10 +474,11 @@ def run_mgpred_fold(
             if model.beta_ema > 0.0:
                 model.update_ema()
 
-            running_loss += float(loss.item())
+            running_loss_t += loss.detach()
             n_batches += 1
 
         if epoch == 1 or epoch % eval_every == 0 or epoch == epochs:
+            running_loss = float(running_loss_t.item())
             val_y, val_p, ema_state = _predict_mgpred(model, valsel_loader, device, use_ema=True)
             val_metrics = eval_regression_predictions(val_y, val_p)
             epoch_valsel_curve.append(float(val_metrics['MacroF1']))
