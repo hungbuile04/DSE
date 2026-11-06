@@ -22,6 +22,7 @@ Fixes applied without modifying `DSGAT/` or `A-3Net-master/`:
 import os
 import copy
 import time
+import warnings
 import argparse
 import importlib.util
 from typing import Dict, List, Optional, Tuple
@@ -30,6 +31,12 @@ import numpy as np
 import scipy.io
 from sklearn.neighbors import kneighbors_graph
 import torch
+
+warnings.filterwarnings(
+    'ignore',
+    message=".*scatter.*torch-scatter.*",
+    category=UserWarning,
+)
 
 from MSSF_plus.protocol import (
     REPO_DIR,
@@ -61,6 +68,11 @@ def _load_module_from_path(module_name: str, file_path: str):
 
 
 def _import_pyg_and_models():
+    try:
+        from rdkit import RDLogger
+        RDLogger.DisableLog('rdApp.*')
+    except Exception:
+        pass
     from torch_geometric.data import Data
     try:
         from torch_geometric.loader import DataLoader as PyGDataLoader

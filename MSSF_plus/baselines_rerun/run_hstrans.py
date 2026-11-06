@@ -50,7 +50,13 @@ from MSSF_plus.baselines_rerun.common import (
     finalize_baseline_experiment,
 )
 
-HSTRANS_DIR = os.path.join(REPO_DIR, 'HSTrans', 'HSTrans_original', 'HSTrans')
+_ORIG_HSTRANS_DIR = os.path.join(REPO_DIR, 'HSTrans', 'HSTrans_original', 'HSTrans')
+_VENDOR_HSTRANS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'hstrans_assets')
+HSTRANS_DIR = (
+    _ORIG_HSTRANS_DIR
+    if os.path.isfile(os.path.join(_ORIG_HSTRANS_DIR, 'Net.py'))
+    else _VENDOR_HSTRANS_DIR
+)
 
 
 def _import_hstrans_model():
