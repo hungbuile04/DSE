@@ -209,8 +209,8 @@ def _attach_fast_convncf_forward(model: ConvNCF) -> None:
 
         conv0 = self.cnn_interaction[0]
         w = conv0.weight.view(self.channel_size, 10, 4, 2, 2)
-        wd = torch.einsum('biux,oijxy->bojsuy', d_stack, w)
-        conv0_out = torch.einsum('bojsuy,bjvy->bouv', wd, s_stack)
+        wd = torch.einsum('biux,oijxy->bojuy', d_stack, w)
+        conv0_out = torch.einsum('bojuy,bjvy->bouv', wd, s_stack)
         if conv0.bias is not None:
             conv0_out = conv0_out + conv0.bias.view(1, -1, 1, 1)
 
