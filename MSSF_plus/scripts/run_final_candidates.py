@@ -21,7 +21,8 @@ import subprocess
 from typing import List, Optional
 
 from MSSF_plus.protocol import REPO_DIR, DEFAULT_RESULTS_V2_DIR
-from MSSF_plus.train import run_experiment, is_fold_complete
+from MSSF_plus.configs.experiments import get_experiment_config
+from MSSF_plus.train import run_experiment, _try_restore_completed_fold
 
 CANDIDATE_EXPS = ['cand_A', 'cand_B', 'cand_C', 'cand_D']
 DIAGNOSTIC_REF_EXPS = [
@@ -46,14 +47,23 @@ def _seed_cand_d_from_full_no_bvi(
     Since `cand_D` is defined identically to `full_no_bvi`, reuse existing `full_no_bvi_{split}`
     fold artifacts if they are already completed in `results_dir` or `drive_dir`.
     """
-    src_local = os.path.join(results_dir, f"full_no_bvi_{split_type}")
-    dst_local = os.path.join(results_dir, f"cand_D_{split_type}")
-    dst_drive = os.path.join(drive_dir, f"cand_D_{split_type}") if drive_dir else None
+    src_folder = f"full_no_bvi_{split_type}"
+    dst_folder = f"cand_D_{split_type}"
+    src_local = os.path.join(results_dir, src_folder)
+    dst_local = os.path.join(results_dir, dst_folder)
+    dst_drive = os.path.join(drive_dir, dst_folder) if drive_dir else None
+
+    cfg_cand_d = get_experiment_config('cand_D')
+    cfg_full_nb = get_experiment_config('full_no_bvi')
 
     for fold in folds:
-        if is_fold_complete('cand_D', split_type, fold, results_dir, drive_dir=drive_dir):
+        if _try_restore_completed_fold(
+            dst_local, drive_dir, dst_folder, fold, eval_test=False, cfg=cfg_cand_d, split_type=split_type
+        ) is not None:
             continue
-        if not is_fold_complete('full_no_bvi', split_type, fold, results_dir, drive_dir=drive_dir):
+        if _try_restore_completed_fold(
+            src_local, drive_dir, src_folder, fold, eval_test=False, cfg=cfg_full_nb, split_type=split_type
+        ) is None:
             continue
 
         os.makedirs(dst_local, exist_ok=True)
@@ -66,7 +76,7 @@ def _seed_cand_d_from_full_no_bvi(
                 continue
             s_path = os.path.join(src_local, fname)
             d_path = os.path.join(dst_local, fname)
-            if fname.endswith('_metrics.json'):
+            if fname.endswith('.json'):
                 with open(s_path, 'r', encoding='utf-8') as f:
                     meta = json.load(f)
                 meta['exp_name'] = 'cand_D'
