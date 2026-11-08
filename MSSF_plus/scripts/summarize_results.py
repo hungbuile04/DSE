@@ -444,6 +444,56 @@ def format_markdown_tables(
                     f"(`{cand_means[selected_cand]:.4f} ± {cand_stds[selected_cand]:.4f}`)."
                 )
 
+    # 2d. Paired fold comparison for p_cold selection on cand_A (p_cold in {0.15, 0.25})
+    p_cold_order = [
+        ('cand_A_p015', '0.15', 'cand_A with c1_view_dropout_prob = 0.15'),
+        ('cand_A', '0.25', 'cand_A with c1_view_dropout_prob = 0.25 (default)'),
+    ]
+    present_pcold = [p for p in p_cold_order if p[0] in collected]
+    if len(present_pcold) == 2:
+        lines.append(
+            f"\n### 2d. Paired Fold Comparison for `p_cold` Selection (`cand_A` with $p_{{\\text{{cold}}}} \\in \\{{0.15, 0.25\\}}$, {target_label})"
+        )
+        pc_fold_maps: Dict[str, Dict[int, float]] = {}
+        pc_means: Dict[str, float] = {}
+        pc_stds: Dict[str, float] = {}
+        for m_name, _, _ in present_pcold:
+            m_data = collected[m_name]
+            src = m_data['valsel'] if eval_target == 'valsel' else m_data['cls']
+            if src is not None and 'per_fold' in src:
+                pc_fold_maps[m_name] = {int(f_i): float(fm['MacroF1']) for f_i, fm in zip(m_data['folds'], src['per_fold'])}
+                pc_means[m_name] = float(src['mean']['MacroF1'])
+                pc_stds[m_name] = float(src['std']['MacroF1'])
+        if len(pc_fold_maps) == 2:
+            common_folds = sorted(set(pc_fold_maps['cand_A_p015'].keys()) & set(pc_fold_maps['cand_A'].keys()))
+            fold_cols = " | ".join([f"Fold {f}" for f in common_folds])
+            fold_align = "|".join(["---:" for _ in common_folds])
+            lines.append(
+                f"| Method | $p_{{\\text{{cold}}}}$ | Description | {fold_cols} | Mean ± Std | Paired $\\Delta$ vs `cand_A` ($p_{{\\text{{cold}}}}=0.25$) | Paired $\\Delta$ (Mean ± Std) |"
+            )
+            lines.append(f"|---|---:|---|{fold_align}|---:|---|---:|")
+            for m_name, p_val, p_desc in present_pcold:
+                f_map = pc_fold_maps[m_name]
+                f_vals_str = " | ".join([f"{f_map[f]:.4f}" for f in common_folds])
+                diffs_ref = [f_map[f] - pc_fold_maps['cand_A'][f] for f in common_folds]
+                diffs_str = ", ".join([f"{d:+.4f}" for d in diffs_ref])
+                d_mean = float(np.mean(diffs_ref))
+                d_std = float(np.std(diffs_ref))
+                lines.append(
+                    f"| `{m_name}` | `{p_val}` | {p_desc} | {f_vals_str} | "
+                    f"{pc_means[m_name]:.4f} ± {pc_stds[m_name]:.4f} | `[{diffs_str}]` | {d_mean:+.4f} ± {d_std:.4f} |"
+                )
+            best_pc = 'cand_A_p015' if pc_means['cand_A_p015'] > pc_means['cand_A'] else 'cand_A'
+            gap_pc = abs(pc_means['cand_A_p015'] - pc_means['cand_A'])
+            max_std_pc = max(pc_stds['cand_A_p015'], pc_stds['cand_A'])
+            chosen_pc = 'cand_A (p_cold = 0.25)' if (best_pc == 'cand_A' or gap_pc <= max_std_pc) else 'cand_A_p015 (p_cold = 0.15)'
+            lines.append(
+                f"\n> **Quy tắc chọn $p_{{\\text{{cold}}}}$ (Split {split_type}, `val_select`)**: "
+                f"`cand_A_p015` ($p_{{\\text{{cold}}}}=0.15$) đạt `{pc_means['cand_A_p015']:.4f} ± {pc_stds['cand_A_p015']:.4f}`, "
+                f"`cand_A` ($p_{{\\text{{cold}}}}=0.25$) đạt `{pc_means['cand_A']:.4f} ± {pc_stds['cand_A']:.4f}` "
+                f"($|\\Delta| = {gap_pc:.4f}$, $\\max\\text{{Std}} = {max_std_pc:.4f}$) $\\rightarrow$ Chọn **`{chosen_pc}`**."
+            )
+
     # 3. C4 Conformal table (with per-drug coverage statistics per Change 4)
     c4_key = 'valsel_conformal' if eval_target == 'valsel' else 'conformal'
     has_any_c4 = any(bool(data.get(c4_key)) for data in collected.values())

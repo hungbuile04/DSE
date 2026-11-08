@@ -17,15 +17,17 @@ Mô hình được đánh giá đồng thời trên hai kịch bản thực tế
 
 > **Ghi chú đặt tên trong bài báo**: Trong mã nguồn, thư mục gói giữ tên kỹ thuật `MSSF_plus/` để đảm bảo tính kế thừa và tương thích đường dẫn; khi viết bài báo, có thể trình bày mô hình dưới tên độc lập như **CONCORD-DSE** (*Cold-start Multi-view Ordinal Network with Conformal Prediction for Drug Side-Effect Frequency*) hoặc **MOSAIC-DSE**.
 
-### 1.2. Bảng ánh xạ các thành phần kỹ thuật (`C1`–`C5`) với mã nguồn
+### 1.2. Bảng ánh xạ các thành phần kỹ thuật (`C1`–`C5`) với mã nguồn (Cấu hình Mô hình Cuối = `cand_A`)
 
-| Ký hiệu | Vai trò & Tên thành phần | Vấn đề khoa học giải quyết | Module hiện thực chính | Cấu hình trong `MSSF_plus_full` |
+| Ký hiệu | Vai trò & Tên thành phần | Vấn đề khoa học giải quyết | Module hiện thực chính | Cấu hình Mô hình Cuối (`cand_A`) |
 | :---: | :--- | :--- | :--- | :--- |
-| **C1** *(Đóng góp chính)* | **Cross-Fitted Cold-Start Profile Imputation, View Dropout & Availability Modulation** | Ở thuốc mới (Split B) và một số view sinh học thưa (`target`, `pathway`), các vector tương đồng bị rỗng toàn `0`, làm sai lệch chuẩn hóa và trọng số encoder; đồng thời tránh lỗi dự đoán in-sample khi giả lập View Dropout trên thuốc train. | `MSSF_plus/views.py`, `MSSF_plus/model.py` | `c1_impute='regress'` ($K=5$ cross-fit), `c1_use_availability=True`, `c1_view_dropout_prob=0.25` |
+| **C1** *(Rút gọn ở mô hình cuối)* | **Mô phỏng Cold-Start khi Huấn luyện (Training-Time Profile View Dropout)** | Ở thuốc mới (Split B), hai view hồ sơ tương tác `D9, D10` bằng `0`; việc ngẫu nhiên đặt `D9, D10 = 0` với xác suất $p_{\text{cold}}$ ngay khi train buộc mạng học cách dự đoán từ 9 view tĩnh mà không cần bộ bù khuyết hay modulator. | `MSSF_plus/views.py`, `MSSF_plus/model.py` | `c1_view_dropout_prob` $\in \{0.15, 0.25\}$ (chọn trên `val_select`), `c1_impute='zero'`, `c1_use_availability=False`, `use_bvi=False` |
 | **C2** | **Hierarchical MedDRA Ontology Side-Effect View (`S5`)** | 4 view SE gốc phụ thuộc mạnh vào hồ sơ tương tác (`S3, S4`) và thiếu cấu trúc phân cấp y khoa chuẩn MedDRA cho toàn bộ 994 SE. | `MSSF_plus/views.py` | `c2_se_mode='plus_ontology'` ($V_s = 5$ views, `4970-D`) |
-| **C3** *(Lựa chọn hàm mục tiêu)* | **Lựa chọn Hàm Mục tiêu Thứ tự (Ordinal Objective Selection) & Cân bằng Lớp** | Đánh giá hệ thống 3 họ hàm mục tiêu (`ce`, `emd`, `corn`) kết hợp trọng số nghịch tần suất lớp (`unweighted` / `weighted`) trên nhãn mềm thứ tự, chọn cấu hình tối ưu trên `val_select`. | `MSSF_plus/losses.py` | Chọn giữa `{ce, emd, corn} × {unweighted, weighted}` theo `val_select` |
+| **C3** *(Lựa chọn hàm mục tiêu)* | **Lựa chọn Hàm Mục tiêu Thứ tự (Ordinal Objective Selection) & Cân bằng Lớp** | Đánh giá hệ thống 3 họ hàm mục tiêu (`ce`, `emd`, `corn`) kết hợp trọng số nghịch tần suất lớp (`unweighted` / `weighted`) trên nhãn mềm thứ tự, chọn cấu hình tối ưu trên `val_select`. | `MSSF_plus/losses.py` | `c3_loss_type='ce'`, `c3_class_weighting=False` (chốt từ Giai đoạn 4 trên `val_select`) |
 | **C4** | **Post-hoc Contiguous Ordinal Conformal Prediction (kèm Độ phủ theo Thuốc ở Split B)** | Dự đoán điểm đơn lẻ không định lượng được độ bất định lâm sàng; các phương pháp Conformal chuẩn (`LAC`, `APS`) sinh ra tập lớp bị đứt quãng. | `MSSF_plus/conformal.py` | `Ordinal_LAC` & `Ordinal_APS` ($\alpha = 0.10$, độ phủ mục tiêu $90\%$) |
-| **C5** | **Multi-View Spectral Clustering Leave-One-Out Soft Labels** | Nhãn tần suất SIDER có nhiễu ranh giới giữa các lớp kế cận trên những thuốc có cùng cấu trúc hóa-sinh học đa khung nhìn. | `MSSF_plus/soft_labels.py`, `MSSF_plus/model.py` | `c5_mode='multi_view'`, `c5_alpha=0.15`, `c5_aux_cluster_weight=0.0` (tắt mặc định) |
+| **C5** | **Multi-View Spectral Clustering Leave-One-Out Soft Labels** | Nhãn tần suất SIDER có nhiễu ranh giới giữa các lớp kế cận trên những thuốc có cùng cấu trúc hóa-sinh học đa khung nhìn. | `MSSF_plus/soft_labels.py`, `MSSF_plus/model.py` | `c5_mode='multi_view'`, `c5_alpha=0.15`, `c5_aux_cluster_weight=0.0` |
+
+> **Phân tích phụ (Supplementary Diagnostic Analysis cho Paper)**: Các biến thể bù khuyết (`regress_ridge`, `regress_knn`, `regress` MLP, `mean`), `AvailabilityModulator`, và nhánh suy luận biến phân **BVI** đã được chứng minh thực nghiệm trên `val_select` (Giai đoạn 4 & Chọn ứng viên `cand_A..cand_D`) là không cần thiết trong mô hình cuối `cand_A`. Tuy nhiên, các cấu hình chẩn đoán có BVI (`C1_avail_only`, `loo_no_C1` so với `C3_ce_unweighted_ridge_selfcorr`) được giữ lại làm **phân tích phụ** để báo cáo hành vi của độ bất định hậu nghiệm $\bar{\sigma}$ (nhóm thuốc thiếu `D9, D10` có $\bar{\sigma}$ cao hơn rõ rệt khi không bù khuyết và thu hẹp về ngang bằng khi có bù khuyết).
 
 ---
 
@@ -49,84 +51,56 @@ Mỗi thuốc $d \in \{0, \dots, 749\}$ được biểu diễn bởi $V_d = 11$ 
 | | `D6_mol2vec_cos` | $750 \times 750$ | Cosine trên `mssf_750/drug_mol.pkl` (Mol2vec `100-D`) | Tĩnh |
 | | `D7_target_cos` | $750 \times 750$ | Cosine trên `mssf_750/drug_target.pkl` | Tĩnh (có hàng thưa = 0) |
 | | `D8_fingerprint` | $750 \times 750$ | `mssf_750/fingerprint_similarity.pkl` (Morgan Jaccard) | Tĩnh |
-| | `D9_profile_freq_cos` | $750 \times 750$ | Cosine các hàng của ma trận tần suất `drug_side_train` | **Tính lại từ `train` (80%)** |
-| | `D10_profile_bin_cos` | $750 \times 750$ | Cosine các hàng của ma trận nhị phân `(drug_side_train > 0)` | **Tính lại từ `train` (80%)** |
+| | `D9_profile_freq_cos` | $750 \times 750$ | Cosine các hàng của ma trận tần suất `drug_side_train` (`selfcorr=1`) | **Tính lại từ `train` (80%)** |
+| | `D10_profile_bin_cos` | $750 \times 750$ | Cosine các hàng của ma trận nhị phân `(drug_side_train > 0)` (`selfcorr=1`) | **Tính lại từ `train` (80%)** |
 | | `D11_pathway_enzyme` | $750 \times 750$ | `mssf_750/drug_pathway_enzyme_similarity.pkl` | Tĩnh (có hàng thưa = 0) |
 | **SE Views** | `S1_adrecs_semantic` | $994 \times 994$ | `mssf_750/side_effect_semantic.pkl` (ADReCS DAG) | Tĩnh |
 | | `S2_glove_cos` | $994 \times 994$ | Cosine trên `mssf_750/glove_wordEmbedding.pkl` (`300-D`) | Tĩnh |
-| | `S3_profile_freq_cos` | $994 \times 994$ | Cosine các cột của `drug_side_train.T` | **Tính lại từ `train` (80%)** |
-| | `S4_profile_bin_cos` | $994 \times 994$ | Cosine các cột của `(drug_side_train > 0).T` | **Tính lại từ `train` (80%)** |
+| | `S3_profile_freq_cos` | $994 \times 994$ | Cosine các cột của `drug_side_train.T` (`selfcorr=1`) | **Tính lại từ `train` (80%)** |
+| | `S4_profile_bin_cos` | $994 \times 994$ | Cosine các cột của `(drug_side_train > 0).T` (`selfcorr=1`) | **Tính lại từ `train` (80%)** |
 | | `S5_meddra_ontology_cos` (**C2**) | $994 \times 994$ | Cosine trên `side_effect_label_750.mat['node_label']` (`994 × 243` MedDRA) | Tĩnh (đủ 100% cho 994 SE) |
 
-- Khi nối phẳng theo chiều đặc trưng cho một cặp $(d, s)$ trong `MSSF_plus_full`:
-  - Đặc trưng thuốc: $x_d \in \mathbb{R}^{11 \times 750} = \mathbb{R}^{8250}$, vector hiện diện $a_d \in \{0, 1\}^{11}$.
-  - Đặc trưng SE: $x_s \in \mathbb{R}^{5 \times 994} = \mathbb{R}^{4970}$, vector hiện diện $a_s \in \{0, 1\}^{5}$.
+- Khi nối phẳng theo chiều đặc trưng cho một cặp $(d, s)$ trong mô hình cuối `cand_A`:
+  - Đặc trưng thuốc: $x_d \in \mathbb{R}^{11 \times 750} = \mathbb{R}^{8250}$.
+  - Đặc trưng SE: $x_s \in \mathbb{R}^{5 \times 994} = \mathbb{R}^{4970}$.
 
 ---
 
-### 3.2. Thành phần C1 (Đóng góp chính) — Bù khuyết Cold-Start Cross-Fitting, View Dropout & Điều biến Hiện diện (`views.py` & `model.py`)
+### 3.2. Thành phần C1 — Rút gọn còn "Mô phỏng Cold-Start khi Huấn luyện" ở Mô hình Cuối (`cand_A`) & Phân tích Ablation Bù khuyết (`views.py` & `model.py`)
 
-1. **Chỉ báo hiện diện trước bù khuyết (Pre-imputation Availability Indicator — `compute_view_availability`)**:
-   Với mọi thực thể $i$ và mọi view $v$ (cả tĩnh lẫn profile), chỉ báo hiện diện được xác định trên các phần tử ngoài đường chéo:
-   $$a_{i,v} = \mathbb{I}\!\left(\sum_{j \neq i} \bigl|S^{(v)}_{i,j}\bigr| > 10^{-12}\right) \in \{0, 1\}$$
-   Ở Split B, mọi thuốc thuộc `val_select` ($67$ thuốc), `val_calib` ($68$ thuốc) và `test` ($75$ thuốc) đều có $a_{d,\text{D9}} = a_{d,\text{D10}} = 0$. Chỉ báo này cũng tự động phát hiện các thuốc thiếu dữ liệu đích sinh học hoặc pathway ở các view tĩnh (`D7`, `D11`).
+1. **Cơ chế C1 trong Mô hình Cuối `cand_A` (`c1_impute='zero'`, `c1_use_availability=False`, `c1_view_dropout_prob` $= p_{\text{cold}}$)**:
+   - Ở Split B (Cold-Start Drug), mọi thuốc mới thuộc `val_select`, `val_calib`, và `test` đều không có cặp tương tác huấn luyện nên hai hàng tương đồng hồ sơ `D9[d], D10[d]` hoàn toàn bằng `0`, trong khi mọi thuốc thuộc `train` đều có `D9[d], D10[d]` khác `0`. Sự lệch phân phối này khiến mô hình gốc (`MSSF_v2_selfcorr`) phụ thuộc quá mức vào `D9, D10` khi train và sụt giảm hiệu năng trên thuốc mới.
+   - Trong `cand_A`, khi `model.train()`, với xác suất $p_{\text{cold}}$ độc lập cho từng mẫu trong mini-batch, hai view `D9, D10` của thuốc train được **đặt trực tiếp về vector `0`** (`_apply_c1_input_processing` trong `MSSF_plus/model.py`), mô phỏng chính xác trạng thái thiếu hồ sơ của thuốc mới lúc suy luận mà **không cần mạng bù khuyết hay `AvailabilityModulator`**.
 
-2. **Ba chiến lược bù khuyết view tương tác (`c1_impute`) & Cơ chế Cross-Fitting $K=5$ theo thuốc (`MSSF_plus/views.py`)**:
-   - **`mean` (Vector trung bình các thuốc train)**: Tính vector trung bình các hàng của `train_drugs` trên `D9` và `D10` (đặt đường chéo $= 1.0$) để điền cho các thuốc thiếu hồ sơ ($a_{d,\text{D9}} = 0$).
-   - **`regress` (`ProfileViewRegressor` trong `MSSF_plus/views.py`, Cross-Fitting $K=5$ theo thuốc — Đề xuất)**:
-     - **Vấn đề của bù khuyết in-sample cũ**: Nếu huấn luyện một `ProfileViewRegressor` duy nhất trên toàn bộ `train_drugs` rồi dùng chính mô hình đó sinh vector dự phòng `fallback_d9, fallback_d10` cho `train_drugs`, sai số dự đoán trên thuốc train sẽ thấp giả tạo (in-sample overfitting), khiến View Dropout lúc train không phản ánh đúng độ nhiễu của thuốc cold-start thật khi test.
-     - **Cơ chế Cross-Fitting $K=5$ theo thuốc (`_make_drug_crossfit_splits`, `train_and_impute_regress`)**:
-       - Chia tập `train_drugs` (theo thuốc, seed cố định) thành $K = 5$ nhóm rời nhau $\mathcal{G}_1, \dots, \mathcal{G}_5$.
-       - Với mỗi nhóm $k \in \{1..5\}$, huấn luyện một mạng MLP `ProfileViewRegressor` thứ $k$ (`2,182,876` tham số, cấu trúc thực tế từ [`ARCHITECTURE_DUMP.md`](file:///Users/buihung/project_DL/DSE/MSSF_plus/ARCHITECTURE_DUMP.md): `Linear(6759, 256) -> LayerNorm((256,)) -> SiLU() -> Dropout(p=0.2) -> Linear(256, 256) -> LayerNorm((256,)) -> SiLU() -> Dropout(p=0.2) -> Linear(256, 1500) -> Sigmoid()`) trên $4$ nhóm còn lại (`val_frac=0.10` tách nội bộ để early-stopping theo MSE, `epochs=80`, `batch_size=64`, `AdamW(lr=1e-3, weight_decay=1e-4)`) với hàm mục tiêu:
-         $$\mathcal{L}_{\text{imp}} = \text{MSE}(\hat{y}, y) + 0.1\,\bigl(1 - \cos(\hat{y}, y)\bigr)$$
-       - Dự đoán cho nhóm giữ lại $\mathcal{G}_k$ để tạo `fallback_d9`, `fallback_d10` **hoàn toàn out-of-fold** cho mọi thuốc train.
-       - Với các thuốc cold-start thuộc `val_select`, `val_calib`, và `test` ($a_{d,\text{D9}} = 0$): điền bằng **trung bình cộng dự đoán (ensemble) của $K = 5$ mạng `ProfileViewRegressor`** (đặt đường chéo $= 1.0$).
-   - **`diffusion` (`ConditionalDenoiserMLP` trong `MSSF_plus/views.py`, Cross-Fitting $K=5$ — Đối chứng ablation)**:
-     - Áp dụng cùng cơ chế Cross-Fitting $K=5$ theo thuốc cho mạng khử nhiễu có điều kiện `ConditionalDenoiserMLP` (`2,650,076` tham số, không có Dropout, trích từ [`ARCHITECTURE_DUMP.md`](file:///Users/buihung/project_DL/DSE/MSSF_plus/ARCHITECTURE_DUMP.md)):
-       - `cond_proj: Linear(6759, 256) -> LayerNorm((256,)) -> SiLU()`
-       - `time_mlp: SinusoidalTimeEmb(64) -> Linear(64, 256) -> SiLU()`
-       - `x_proj: Linear(1500, 256)`
-       - Cộng gộp: `h = x_proj(x_t) + cond_proj(cond) + time_mlp(t)`
-       - `blocks: Linear(256, 256) -> LayerNorm((256,)) -> SiLU() -> Linear(256, 256) -> LayerNorm((256,)) -> SiLU() -> Linear(256, 1500) -> Sigmoid()`
-       - Huấn luyện (`train_and_impute_diffusion`): dự đoán trực tiếp $x_0 \in [0, 1]^{1500}$ với loss `F.mse_loss(x0_hat, x0_b)`, `epochs=100`, `batch_size=64`, `AdamW(lr=1e-3, weight_decay=1e-4)`, $T=25$ bước khuếch tán ($\beta \in [10^{-4}, 0.2]$) và lấy mẫu trung bình $B=10$ quỹ đạo ngược.
-   - **Kiểm chứng thực nghiệm trên Fold 0 Split B (`CHANGE1_CROSSFIT_REPORT.md`)**:
-     - Sai số MSE trung bình `(D9, D10)` của fallback out-of-fold trên thuốc train (`0.010050`) khớp sát với dự đoán trên thuốc cold-start `val_select` (`0.009274`), loại bỏ hoàn toàn độ lệch lạc quan của in-sample cũ (`0.008631`).
-     - Trên `val_select` Split B Fold 0, `regress` ($K=5$) vượt trội rõ rệt so với `mean` và `diffusion` trên cả 3 tiêu chí: MSE thấp nhất (`0.009274` so với `mean` `0.010361`, `diffusion` `0.010614`), tương quan hạng Spearman theo hàng cao nhất (`0.6843` so với `mean` `0.6364`), và tỷ lệ trùng Top-10 láng giềng gần nhất gấp đôi `mean` (`14.78%` so với `7.46%`; riêng `D9` đạt `16.57%` so với `7.91%`). Do `diffusion` có MSE kém hơn `mean` trên `val_select`, `C1_avail_vdrop_diffusion` chỉ giữ lại làm 1 dòng đối chứng trong bảng Ablation C1 (dev folds) và loại khỏi `MSSF_plus_full` cũng như chạy 10 folds.
-
-3. **Giả lập Cold-Start khi huấn luyện (Profile View Dropout — `_apply_c1_input_processing` trong `MSSF_plus/model.py`)**:
-   Trong `model.train()`, với xác suất $p_{\text{drop}} = 0.25$ cho từng mẫu trong mini-batch, hai view `D9, D10` của thuốc warm-start bị thay bằng vector dự phòng out-of-fold (`fallback_d9`, `fallback_d10`) và hai bit $a_{d,\text{D9}}, a_{d,\text{D10}}$ bị hạ xuống $0$.
-
-4. **Điều biến đầu vào theo trạng thái hiện diện (`AvailabilityModulator` trong `MSSF_plus/model.py`)**:
-   Đặt ngay trước 3 encoder cho cả thuốc (`8,767` tham số) và SE (`5,085` tham số). Với tensor đầu vào dạng $(B, V, D_{\text{view}})$ và vector hiện diện $a \in [0, 1]^{B \times V}$:
-   $$g(a) = \tanh\!\bigl(W_2\,\text{SiLU}(W_1 a + b_1) + b_2\bigr) \in (-1, 1)^{B \times V}$$
-   $$\tilde{X}_{b,v,:} = X_{b,v,:} \cdot \bigl(1 + 0.2\,g(a)_{b,v}\bigr) + (1 - a_{b,v})\,m_v$$
-   trong đó $m_v \in \mathbb{R}^{D_{\text{view}}}$ là token bù khuyết khả học cho view $v$ (khởi tạo $W_2 = 0, b_2 = 0, m_v = 0$ để bảo toàn ánh xạ đồng nhất ở đầu quá trình huấn luyện). Để tách riêng đóng góp của bộ điều biến, cấu hình ablation `C1_regress_no_modulator` giữ nguyên bù khuyết `regress` + View Dropout nhưng tắt `AvailabilityModulator`.
+2. **Bằng chứng thực nghiệm từ Ablation Giai đoạn 4 & Chọn ứng viên `cand_A..cand_D` (`val_select`, Split B & A)**:
+   - Trên Split B (`val_select`, Folds 0–2), `C1_vdrop_only` đạt Macro-F1 = **`0.4176 ± 0.0258`**, cao hơn hoặc ngang bằng toàn bộ các biến thể kết hợp bù khuyết (`regress_ridge`: `0.4022`, `ridge_no_modulator`: `0.4121`, `regress` MLP: `0.4045`, `knn`: `0.4043`, `mean`: `0.4055`, `zero+modulator`: `0.4092`, `drop`: `0.4120`), trong khi chỉ bật `AvailabilityModulator` mà không có View Dropout (`C1_avail_only`) chỉ đạt **`0.3413 ± 0.0149`**.
+   - Khi kết hợp với `C2 + C5 + CE` và bỏ BVI (`cand_A..cand_D`), hiệu số trung bình theo cặp fold so với `cand_A` của `cand_B` (+modulator: `+0.0026 ± 0.0062` trên Split B, `+0.0049 ± 0.0085` trên Split A), `cand_C` (+ridge impute: `+0.0032 ± 0.0020` trên Split B, `+0.0005 ± 0.0015` trên Split A), và `cand_D` (+cả hai: `+0.0114 ± 0.0086` trên Split B, `+0.0034 ± 0.0134` trên Split A) đều **nhỏ hơn 1 độ lệch chuẩn giữa các fold** $\rightarrow$ theo quy tắc ưu tiên cấu hình đơn giản hơn, **`cand_A`** được chọn làm mô hình cuối.
 
 ---
 
-### 3.3. Lõi Biểu diễn Đa tỷ lệ, Hợp nhất Self-Attention & BVI (`MSSF_plus/model.py`)
+### 3.3. Lõi Biểu diễn Đa tỷ lệ, Hợp nhất Self-Attention & Chiếu Tất định Không BVI ở `cand_A` (`MSSF_plus/model.py`)
 
-Sau bước điều biến `C1`, cặp biểu diễn $(\tilde{x}_d, \tilde{x}_s)$ đi qua **3 nhánh mã hóa bổ trợ nhau** (kế thừa cấu trúc đa tỷ lệ của MSSF gốc nhưng tổng quát hóa động cho mọi cặp số lượng view $(V_d, V_s)$; tổng số tham số đọc từ [`ARCHITECTURE_DUMP.md`](file:///Users/buihung/project_DL/DSE/MSSF_plus/ARCHITECTURE_DUMP.md) là **`10,097,399`** ở `MSSF_v2` và **`10,754,421`** ở `C3_ce_unweighted`):
+Cặp biểu diễn $(x_d, x_s)$ đi qua **3 nhánh mã hóa bổ trợ nhau** (kế thừa cấu trúc đa tỷ lệ của MSSF gốc nhưng tổng quát hóa động cho $(V_d=11, V_s=5)$ và bỏ BVI ở `cand_A`):
 
-1. **Nhánh 1 — `EncoderConnection` (Tương tác ghép nối toàn cục + Autoencoder — `6,602,562` tham số ở `MSSF_v2`, `7,112,484` tham số ở `C3_ce_unweighted`)**:
-   - Ghép toàn bộ các view: $u_{\text{con}} = [\tilde{x}_d \,\|\, \tilde{x}_s] \in \mathbb{R}^{B \times (750 V_d + 994 V_s)}$ (`12226-D` khi $V_d=11, V_s=4$; `13220-D` khi $V_d=11, V_s=5$).
+1. **Nhánh 1 — `EncoderConnection` (Tương tác ghép nối toàn cục + Autoencoder — `7,112,484` tham số ở $V_d=11, V_s=5$)**:
+   - Ghép toàn bộ các view: $u_{\text{con}} = [x_d \,\|\, x_s] \in \mathbb{R}^{B \times 13220}$ ($750 \times 11 + 994 \times 5 = 13220$).
    - Mã hóa: `Linear(13220 -> 256) -> BatchNorm1d -> LeakyReLU(0.01) -> Dropout(0.4) -> Attention(256, heads=4) -> Linear(256 -> 128)` tạo `feature1` $\in \mathbb{R}^{B \times 128}$.
    - Giải mã phụ trợ: `Linear(128 -> 256) -> BN -> LeakyReLU -> Dropout -> Linear(256 -> 13220)` tạo `rec_con` phục vụ loss tái tạo $\mathcal{L}_{\text{rec,con}}$.
 
 2. **Nhánh 2 — `EncoderAddition` (Cộng gộp đồng thuận xuyên view + Autoencoder — `1,225,296` tham số)**:
-   - Cộng từng phần tử qua các view: $\bar{x}_d = \sum_{v=1}^{V_d} \tilde{x}_d^{(v)} \in \mathbb{R}^{B \times 750}$, $\bar{x}_s = \sum_{u=1}^{V_s} \tilde{x}_s^{(u)} \in \mathbb{R}^{B \times 994}$, rồi ghép $u_{\text{add}} = [\bar{x}_d \,\|\, \bar{x}_s] \in \mathbb{R}^{B \times 1744}$.
+   - Cộng từng phần tử qua các view: $\bar{x}_d = \sum_{v=1}^{11} x_d^{(v)} \in \mathbb{R}^{B \times 750}$, $\bar{x}_s = \sum_{u=1}^{5} x_s^{(u)} \in \mathbb{R}^{B \times 994}$, rồi ghép $u_{\text{add}} = [\bar{x}_d \,\|\, \bar{x}_s] \in \mathbb{R}^{B \times 1744}$.
    - Qua kiến trúc đối xứng với nhánh 1 (`1744 -> 256 -> Attention -> 128`) tạo `feature2` $\in \mathbb{R}^{B \times 128}$ và tái tạo `rec_add` $\in \mathbb{R}^{B \times 1744}$.
 
-3. **Nhánh 3 — `Preprocess` (`1,570,688` / `1,698,304` tham số) + `CrossProduction` (`55,584` / `61,216` tham số)**:
-   - `Preprocess`: $V_d$ mạng chiếu riêng đưa từng view thuốc `750-D` $\to e_d^{(v)} \in \mathbb{R}^{B \times 128}$; $V_s$ mạng chiếu riêng đưa từng view SE `994-D` $\to e_s^{(u)} \in \mathbb{R}^{B \times 128}$.
-   - `CrossProduction`: Bản gốc tính tích ngoài từng cặp $M^{(v,u)} = e_d^{(v)} \otimes e_s^{(u)} \in \mathbb{R}^{B \times 128 \times 128}$ cho mọi $(v, u)$, xếp chồng thành tensor 4 chiều kích thước $(B,\; V_d \times V_s,\; 128,\; 128)$ (`44` kênh khi $V_d=11, V_s=4$ ở `MSSF_v2`; `55` kênh khi $V_d=11, V_s=5$ ở `MSSF_plus`). Trong bản phân rã đại số (`use_factored_crossprod=True`), tầng `cnn[0]` (`Conv2d(k=4, s=4)`, trọng số reshape thành 5 chiều $(32, V_d, V_s, 4, 4)$) được tính trực tiếp từ $D \in \mathbb{R}^{B \times V_d \times 32 \times 4}$ và $S \in \mathbb{R}^{B \times V_s \times 32 \times 4}$ qua 2 phép nhân ma trận (`torch.mm` và `torch.bmm`) mà không cần khởi tạo tensor $(B, V_d \times V_s, 128, 128)$.
-   - Đưa qua 3 khối `Conv2d(kernel_size=4, stride=4) + BatchNorm2d(32) + ReLU`: kích thước không gian thu gọn $128 \to 32 \to 8 \to 2$ với $32$ kênh, trải phẳng thành `feature3` $\in \mathbb{R}^{B \times (32 \times 2 \times 2)} = \mathbb{R}^{B \times 128}$.
+3. **Nhánh 3 — `Preprocess` (`1,698,304` tham số) + `CrossProduction` phân rã đại số (`61,216` tham số)**:
+   - `Preprocess`: $V_d=11$ mạng chiếu riêng đưa từng view thuốc `750-D` $\to e_d^{(v)} \in \mathbb{R}^{B \times 128}$; $V_s=5$ mạng chiếu riêng đưa từng view SE `994-D` $\to e_s^{(u)} \in \mathbb{R}^{B \times 128}$.
+   - `CrossProduction` (`use_factored_crossprod=True`): Tầng `cnn[0]` (`Conv2d(k=4, s=4)`, trọng số reshape thành $(32, V_d, V_s, 4, 4)$) được tính trực tiếp từ $D \in \mathbb{R}^{B \times V_d \times 32 \times 4}$ và $S \in \mathbb{R}^{B \times V_s \times 32 \times 4}$ qua 2 phép nhân ma trận mà không cần khởi tạo tensor 4 chiều $(B, 55, 128, 128)$.
+   - Đưa qua 3 khối `Conv2d(kernel_size=4, stride=4) + BatchNorm2d(32) + ReLU`: kích thước không gian thu gọn $128 \to 32 \to 8 \to 2$ với $32$ kênh, trải phẳng thành `feature3` $\in \mathbb{R}^{B \times 128}$.
 
-4. **Hợp nhất Self-Attention (`591,744` tham số), suy luận biến phân BVI (`49,280` tham số) & Classifier (`2,245` tham số)**:
+4. **Hợp nhất Self-Attention (`591,744` tham số), Chiếu Tất định (`use_bvi=False`, `24,640` tham số) & Classifier (`2,245` tham số)**:
    - Ghép $h = [\text{feature1} \,\|\, \text{feature2} \,\|\, \text{feature3}] \in \mathbb{R}^{B \times 384}$, đưa qua `Attention(384, heads=4)`.
-   - `GaussianParametrizer`: ánh xạ thành $\mu \in \mathbb{R}^{B \times 64}$ và $\log\sigma^2 \in \mathbb{R}^{B \times 64}$; lấy mẫu tái tham số hóa $z = \mu + \epsilon \odot \exp(0.5 \log\sigma^2)$ khi train và dùng tất định $z = \mu$ khi đánh giá (`model.eval()`).
-   - **Đầu ra chính (`Classifier`)**: `Linear(64 -> 32) -> LeakyReLU(0.01) -> Dropout(0.4) -> Linear(32 -> C)` với $C = 5$ logits (cho `ce`, `emd`) hoặc $C = 4$ logits (cho `corn`).
-   - **Đầu ra phụ C5 (`aux_cluster_head`, tắt mặc định trong `MSSF_plus_full`)**: Chỉ kích hoạt trong biến thể ablation `C5_multi_view_aux` (`c5_aux_cluster_weight = 0.05`) để kiểm tra xem việc thêm loss phân cụm phụ có cải thiện `Macro-F1` trên `val_select` ở cả hai Split hay không.
+   - **Bỏ BVI ở mô hình cuối `cand_A` (`use_bvi=False`)**: thay vì nhánh biến phân $(\mu, \log\sigma^2)$, đặc trưng hợp nhất đi qua tầng chiếu tuyến tính tất định `det_proj: Linear(384 -> 64)` (`24,640` tham số, giảm một nửa so với `49,280` tham số của `GaussianParametrizer`).
+   - **Đầu ra chính (`Classifier`)**: `Linear(64 -> 32) -> LeakyReLU(0.01) -> Dropout(0.4) -> Linear(32 -> 5)`.
+   - **Phân tích phụ BVI $\sigma$ (không thuộc mô hình cuối `cand_A`)**: Ở các cấu hình chẩn đoán giữ BVI (`C1_avail_only`, `loo_no_C1` vs `C3_ce_unweighted_ridge_selfcorr`), $\bar{\sigma}$ của nhóm thuốc thiếu `D9, D10` cao hơn rõ rệt khi không bù khuyết và thu hẹp về ngang bằng khi có bù khuyết `regress_ridge`, nhưng $\sigma$ không tương quan thuận với kích thước tập dự đoán Conformal (`|C|`) nên BVI được loại bỏ khỏi `cand_A`.
 
 ---
 
@@ -140,6 +114,7 @@ Kỹ thuật **Multi-View Spectral Clustering** được dùng để làm trơn 
 2. **Tự động chọn số cụm tối ưu $K^* \in [k_{\min}, k_{\max}]$**:
    - Giải bài toán trị riêng $L_{\text{sym}} u_j = \lambda_j u_j$, duyệt $K$ và chọn $K^*$ cực đại hóa chỉ số kết hợp giữa độ tách cụm Silhouette trên không gian phổ chuẩn hóa hàng $U_K$ và bước nhảy phổ (eigengap) $\Delta_K = \lambda_{K+1} - \lambda_K$:
      $$\text{Score}(K) = 0.6 \cdot \text{Silhouette}(U_K) + 0.4 \cdot \frac{\Delta_K}{\max_{K'} \Delta_{K'}}}$$
+   - Thực nghiệm Giai đoạn 4 cho thấy tự động chọn $K^* \in [4, 12]$ (`C5_multi_view`: `0.3701 ± 0.0091`) và cố định $K=6$ (`C5_multi_view_fixedK6`: `0.3693 ± 0.0268`) có trung bình Macro-F1 ngang nhau trên Split B, nhưng tự chọn $K^*$ theo từng fold giảm phương sai giữa các fold xuống gần 3 lần (`± 0.0091` vs `± 0.0268`).
 3. **Sinh phân phối nhãn mềm Leave-One-Out nghiêm ngặt ($d' \neq d$)**:
    - Với mỗi cặp huấn luyện $(d, s, y)$ thuộc cụm $c = c(d)$, xét tập các thuốc **khác $d$** trong cùng cụm $c$ cũng có tương tác huấn luyện đã biết với cùng SE $s$:
      $$\mathcal{N}_{c,s}^{(-d)} = \bigl\{(d', s, y_{d',s}) \in \mathcal{T}_{\text{train}} \;\big|\; c(d') = c,\; d' \neq d\bigr\}$$
@@ -149,21 +124,13 @@ Kỹ thuật **Multi-View Spectral Clustering** được dùng để làm trơn 
 
 ---
 
-### 3.5. Thành phần C3 — Đơn giản hóa Hàm Mất mát & Lựa chọn Mục tiêu Thứ tự (`MSSF_plus/losses.py`)
+### 3.5. Thành phần C3 — Hàm Mất mát của Mô hình Cuối `cand_A` (`MSSF_plus/losses.py`)
 
-Sau khi đơn giản hóa (gỡ bỏ hoàn toàn `ce_softquant` khỏi `MSSF_plus` và tắt mặc định `aux_cluster_head`), hàm mất mát của `MSSF_plus_full` **giữ nguyên cấu trúc của MSSF gốc**, chỉ thay số hạng phân lớp bằng hàm mục tiêu thứ tự C3 tính trên nhãn mềm $q$ của C5:
-$$\mathcal{L}_{\text{total}} = \mathcal{L}_{\text{C3}}(\text{logits}, y, q) + 10^{-3}\mathcal{L}_{\text{KL}}(\mu, \log\sigma^2) + 10^{-4}\mathcal{L}_{\text{rec,con}} + 10^{-4}\mathcal{L}_{\text{rec,add}}$$
-*(Ba số hạng phụ $\mathcal{L}_{\text{KL}}$, $\mathcal{L}_{\text{rec,con}}$, $\mathcal{L}_{\text{rec,add}}$ giữ nguyên trọng số như `MSSF_v2`, không tính là thành phần mới).*
+Ở mô hình cuối **`cand_A`** (`c3_loss_type='ce'`, `c3_class_weighting=False`, `use_bvi=False`), hàm mất mát huấn luyện hoàn toàn tất định (không còn số hạng $\mathcal{L}_{\text{KL}}$ do đã bỏ BVI):
+$$\mathcal{L}_{\text{cand\_A}} = \mathcal{L}_{\text{CE}}(\text{logits}, q) + 10^{-4}\mathcal{L}_{\text{rec,con}} + 10^{-4}\mathcal{L}_{\text{rec,add}}$$
+trong đó $\mathcal{L}_{\text{CE}}(\text{logits}, q) = -\sum_{k=0}^4 q_k \log p_k$ được tính trực tiếp trên phân phối nhãn mềm Leave-One-Out $q$ của C5.
 
-Trọng số nghịch đảo tần suất lớp (khi bật `c3_class_weighting=True`) được tính **chỉ từ tập `train` (80%)**:
-$$w_k = \frac{N_{\text{train}}}{5\,N_{\text{train}, k}}, \qquad k \in \{0, 1, 2, 3, 4\}$$
-
-Ba họ hàm mục tiêu trong nhóm C3 (`{ce, emd, corn} × {unweighted, weighted}` — tổng cộng 6 tổ hợp):
-1. **`ce`**: Cross-Entropy trên phân phối đích $q$: $-\sum_{k=0}^4 q_k \log p_k$ (nhân trọng số mẫu $w_y$ khi `c3_class_weighting=True`).
-2. **`emd`**: Squared Earth Mover's Distance giữa hàm phân phối tích lũy dự đoán $\text{CDF}(p)$ và $\text{CDF}(q)$: $\sum_{k=0}^3 \bigl(\sum_{j \le k} p_j - \sum_{j \le k} q_j\bigr)^2$.
-3. **`corn`**: Ordinal Binary Cross-Entropy trên 4 ngưỡng thứ tự $k \in \{0, 1, 2, 3\}$; khi kết hợp với nhãn mềm $q$ của C5, vector $q \in \Delta^4$ được chuyển trực tiếp sang **đích xác suất tích lũy** $T_k = P(y > k) = \sum_{j = k+1}^4 q_j$.
-
-**Quy tắc chọn hàm mục tiêu C3 cho `MSSF_plus_full`**: Đánh giá 6 tổ hợp `{ce, emd, corn} × {unweighted, weighted}` trên `val_select` của folds `0–2` (cả Split A và Split B). Chọn theo `Macro-F1` trung bình trên `val_select`, ưu tiên hàm đơn giản hơn (`ce > emd > corn`) nếu chênh lệch nhỏ hơn độ lệch chuẩn giữa các fold.
+Trong nghiên cứu Ablation Giai đoạn 4, 6 tổ hợp `{ce, emd, corn} × {unweighted, weighted}` đã được đối chiếu trên `val_select` của Folds 0–2 (cả Split B và Split A); `ce` không trọng số lớp (`unweighted`) đạt trung bình `Macro-F1` cao nhất (`0.4179 ± 0.0230` trên Split B và `0.6509 ± 0.0074` trên Split A) nên được chọn làm hàm mục tiêu chính thức.
 
 ---
 

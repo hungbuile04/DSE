@@ -17,48 +17,47 @@
 | Kích thước mini-batch | `batch_size` / `eval_batch_size` | `512` / `512` | Kế thừa từ cấu hình chạy chuẩn của `MSSF` | **Không** | Cố định |
 | Tốc độ học & L2 decay | `lr` / `weight_decay` | `1e-4` / `1e-5` | Kế thừa nguyên bản từ `MSSF/mssf.py` (Adam) | **Không** | Cố định |
 | Tỷ lệ Dropout backbone | `dropout` (`experiments.py`, `model.py`) | `0.4` | Kế thừa nguyên bản từ `MSSF/mssf.py` (`Dropout(p=0.4, inplace=False)` trong `print(model)`) | **Không** | Cố định |
-| Chiều không gian BVI | `gp` (`model.py`) | `64` | Kế thừa nguyên bản từ `MSSF/mssf.py` | **Không** | Cố định |
+| Chiều không gian chiếu đặc trưng hợp nhất | `gp` (`model.py`) | `64` (`use_bvi=False` ở mô hình cuối `cand_A`) | Kế thừa chiều `64` từ `MSSF/mssf.py`; mô hình cuối `cand_A` **bỏ BVI** (`use_bvi=False`, dùng chiếu tất định `Linear(384, 64)` sau khi so sánh 2×2 BVI trên `val_select`) | **Không** | Cố định (`use_bvi=False` ở `cand_A`) |
 | Số đầu Self-Attention | `heads` (`model.py`) | `4` | Kế thừa nguyên bản từ `MSSF/model.py` | **Không** | Cố định |
-| Trọng số loss phụ MSSF gốc | `kl_weight`, `rec_con_weight`, `rec_add_weight` | `1e-3`, `1e-4`, `1e-4` | Kế thừa nguyên bản từ `MSSF/mssf.py` L306 (không coi là thành phần mới) | **Không** | Cố định |
+| Trọng số loss phụ MSSF gốc | `kl_weight`, `rec_con_weight`, `rec_add_weight` | `0.0` (bỏ KL khi `use_bvi=False`), `1e-4`, `1e-4` | Kế thừa nguyên bản từ `MSSF/mssf.py` L306; ở `cand_A` (`use_bvi=False`) không dùng $\mathcal{L}_{\text{KL}}$ | **Không** | Cố định |
 | Tiêu chí chọn Best Epoch | `selection_metric` (`train.py`) | `'MacroF1'` | Chốt từ Audit Report, đánh giá trên `val_select` mỗi epoch | **Không** | Cố định |
 
 ---
 
-### 1.2. Siêu tham số Thành phần `C1` (Xử lý View Thiếu & Bù khuyết Cross-Fitting)
+### 1.2. Siêu tham số Thành phần `C1` — Rút gọn còn "Mô phỏng Cold-Start khi Huấn luyện" ở Mô hình Cuối (`cand_A`)
 
-| Siêu tham số | Khóa trong `cfg` / vị trí code | Giá trị hiện tại | Cách đã chọn / Nguồn gốc | Có dùng `test`? | Trạng thái |
+> **Kết luận từ Giai đoạn 4 & Chọn Ứng viên Mô hình Cuối (`cand_A..cand_D`) trên `val_select`**:
+> - Đóng góp của `C1` đến từ **Profile View Dropout khi huấn luyện** (`C1_vdrop_only` đạt `0.4176 ± 0.0258` trên Split B, ngang hoặc vượt mọi biến thể có bù khuyết `0.4022–0.4121`, trong khi `C1_avail_only` không có View Dropout chỉ đạt `0.3413 ± 0.0149`).
+> - So sánh 4 ứng viên `cand_A..cand_D` trên Folds 0–2 (`val_select`, cả hai split) theo quy tắc ưu tiên cấu hình đơn giản hơn khi $|\Delta\text{ vs best}| \le 1\text{ Std}$ giữa các fold đã chọn **`cand_A`** (`vdrop_only + C2 + C5 + CE`, **bỏ BVI**, **KHÔNG bù khuyết** `c1_impute='zero'`, **KHÔNG modulator** `c1_use_availability=False`).
+> - Do đó, ở mô hình cuối `cand_A`, thành phần `C1` chỉ còn duy nhất 1 siêu tham số là **xác suất ẩn view hồ sơ tương tác khi train** (`c1_view_dropout_prob`, ký hiệu $p_{\text{cold}}$).
+
+| Siêu tham số | Khóa trong `cfg` / vị trí code | Giá trị ở `cand_A` | Cách đã chọn / Nguồn gốc | Có dùng `test`? | Trạng thái |
 | :--- | :--- | :---: | :--- | :---: | :--- |
-| Chiến lược bù khuyết | `c1_impute` (`views.py`) | `'regress_ridge'` | Chọn qua kiểm chứng MSE/Spearman/Top-10 trên `val_select` Fold 0 và đối chiếu `Macro-F1`, `QWK`, `MAE` trên `val_select` Fold 0–2 (`regress_ridge` vs `regress` MLP vs `mean`) | **Không** | Mặc định chính thức (`regress` MLP giữ làm 1 dòng ablation; bỏ `diffusion`) |
-| Số nhóm cross-fitting $K$ | `c1_crossfit_folds` (`views.py`) | `5` | Chuẩn 5-fold cross-fitting theo thuốc trên `train_drugs` | **Không** | Cố định theo thiết kế |
-| Tỷ lệ tách early-stop nội bộ | `val_frac` (`_make_drug_crossfit_splits`) | `0.10` (10%) | Tách nội bộ 10% từ 4 nhóm `train_drugs` để chọn $\alpha$ (cho `regress_ridge`) hoặc best epoch (cho `ProfileViewRegressor` MLP) | **Không** | Cố định theo thiết kế |
-| Số epoch tối đa của `ProfileViewRegressor` (ablation MLP) | `c1_imputer_epochs` (`views.py`) | `80` | Có early-stopping nội bộ trên 10% `val_sub` của `train_drugs` | **Không** | Tự chọn qua `val_sub` |
-| Kiến trúc & tối ưu `ProfileViewRegressor` (ablation MLP) | `hidden_dim=256`, `dropout=0.2`, `lr=1e-3`, `wd=1e-4`, `batch_size=64`, `cos_weight=0.1` | Cố định trong `views.py` L133–236 | Thiết kế MLP chuẩn; chọn epoch bằng MSE trên `val_sub` (10% `train_drugs`) | **Không** | Cố định (chỉ dùng cho dòng ablation MLP) |
-| Siêu tham số `diffusion` (`T`, `B`, `epochs`, $\beta$) | `c1_diffusion_steps=25`, `c1_diffusion_samples=10`, `c1_diffusion_epochs=100`, $\beta \in [10^{-4}, 0.2]$ | Cố định trong `views.py` L343–408 | Do `diffusion` có MSE trên `val_select` Split B cao hơn `mean` (`0.010614 > 0.010361`), đã **bỏ khỏi mọi lần chạy tiếp theo** | **Không** | Đã loại bỏ |
-| Biên độ cổng điều biến `AvailabilityModulator` | Hệ số `0.2` trong $1 + 0.2\tanh(\cdot)$ (`model.py` L75) | `0.2` | Thiết kế kiến trúc khởi tạo đồng nhất ($W_2=0, b_2=0, m_v=0 \implies \tilde{X}=X$ tại $t=0$); kiểm chứng qua ablation `C1_ridge_no_modulator` trên `val_select` | **Không** | Kiểm chứng qua ablation trên `val_select` |
-| **Xác suất Profile View Dropout khi train** | `c1_view_dropout_prob` (`experiments.py`) | `0.25` | Khởi tạo heuristic ban đầu ($0.25$), **chưa chọn trên `val_select`** | **Không** | **Sẽ tune trên `val_select` fold 0–2 (trong ngân sách $\le 6$ cấu hình)** |
+| **Xác suất mô phỏng Cold-Start khi train ($p_{\text{cold}}$)** | `c1_view_dropout_prob` (`experiments.py`) | So sánh $p_{\text{cold}} \in \{0.15, 0.25\}$ trên `val_select` | Trong lần chạy 4 ứng viên `cand_A..cand_D` (`experiments.py` L460), `cand_A` dùng giá trị khởi tạo heuristic $p_{\text{cold}} = 0.25$ (ghi chú `p = 0.15` trong bản tóm tắt văn bản trước đó là nhầm với `c5_alpha = 0.15`). Để chọn minh bạch trên `val_select`, chạy trực tiếp `cand_A` với $p_{\text{cold}} \in \{0.15, 0.25\}$ (`cand_A_p015` vs `cand_A`) trên Fold 0–2, Split B qua `MSSF_plus/scripts/run_p_cold_selection.py` | **Không** | **Chọn trực tiếp trên `val_select` Fold 0–2, Split B (`{0.15, 0.25}`)** |
+| Chiến lược bù khuyết | `c1_impute` (`views.py`) | `'zero'` (Không bù khuyết ở `cand_A`) | Đã kiểm chứng qua Ablation Giai đoạn 4 và `cand_A..cand_D` trên `val_select`: bỏ bù khuyết ở mô hình cuối `cand_A` (`c1_impute='zero'`). Các cấu hình có bù khuyết (`regress_ridge`, `regress_knn`, `regress` MLP, `mean`) chỉ giữ trong bảng Ablation Giai đoạn 4 và phân tích phụ $\sigma$ | **Không** | **Đã loại bỏ khỏi mô hình cuối `cand_A`** |
+| Bộ điều biến hiện diện `AvailabilityModulator` | `c1_use_availability` (`model.py`) | `False` (Tắt ở `cand_A`) | Đã kiểm chứng qua `cand_A` vs `cand_B` trên `val_select` Fold 0–2 ($|\Delta| < 1\text{ Std}$): bỏ `AvailabilityModulator` ở mô hình cuối `cand_A` | **Không** | **Đã loại bỏ khỏi mô hình cuối `cand_A`** |
 
 ---
 
 ### 1.3. Siêu tham số Thành phần `C2` (View Ontology MedDRA cho Tác dụng phụ)
 
-| Siêu tham số | Khóa trong `cfg` / vị trí code | Giá trị hiện tại | Cách đã chọn / Nguồn gốc | Có dùng `test`? | Trạng thái |
+| Siêu tham số | Khóa trong `cfg` / vị trí code | Giá trị ở `cand_A` | Cách đã chọn / Nguồn gốc | Có dùng `test`? | Trạng thái |
 | :--- | :--- | :---: | :--- | :---: | :--- |
-| Chế độ SE Views | `c2_se_mode` (`views.py`) | `'plus_ontology'` | Dùng ma trận chuẩn `side_effect_label_750.mat['node_label']` ($994 \times 243$, chốt từ Audit Report); kiểm chứng bật/tắt qua ablation `C2` & `loo_no_C2` trên `val_select` | **Không** | Không có siêu tham số số; kiểm chứng qua ablation |
+| Chế độ SE Views | `c2_se_mode` (`views.py`) | `'plus_ontology'` | Dùng ma trận chuẩn `side_effect_label_750.mat['node_label']` ($994 \times 243$, chốt từ Audit Report); kiểm chứng bật/tắt qua ablation `C2` & `cand_A_loo_no_C2` | **Không** | Không có siêu tham số số; cố định ở `cand_A` |
 
 ---
 
 ### 1.4. Siêu tham số Thành phần `C3` (Lựa chọn Hàm Mục tiêu Ordinal & Cân bằng Lớp)
 
-| Siêu tham số | Khóa trong `cfg` / vị trí code | Giá trị hiện tại | Cách đã chọn / Nguồn gốc | Có dùng `test`? | Trạng thái |
+| Siêu tham số | Khóa trong `cfg` / vị trí code | Giá trị ở `cand_A` | Cách đã chọn / Nguồn gốc | Có dùng `test`? | Trạng thái |
 | :--- | :--- | :---: | :--- | :---: | :--- |
-| Loại hàm mục tiêu & Cân bằng lớp | `c3_loss_type` $\in \{\text{'ce'}, \text{'emd'}, \text{'corn'}\}$, `c3_class_weighting` $\in \{\text{False}, \text{True}\}$ | Đang chạy chọn trên fold 0–2 | Chạy đủ 6 tổ hợp trên `fold 0–2` (Split A & B), chọn theo `Macro-F1` trung bình trên `val_select` (ưu tiên `ce > emd > corn` nếu chênh lệch $< 1\text{ std}$) | **Không** | **Chọn trực tiếp trên `val_select` fold 0–2 (Giai đoạn 4)** |
-| Trọng số lớp $w_k$ | `compute_class_weights_from_train` (`losses.py`) | $w_k = \frac{N_{\text{train}}}{5\,N_{\text{train},k}}$ | Công thức nghịch đảo tần suất xác định hoàn toàn từ tập `train` (80%) của từng fold | **Không** | Tất định từ `train` |
+| Loại hàm mục tiêu & Cân bằng lớp | `c3_loss_type='ce'`, `c3_class_weighting=False` | `'ce'` (Unweighted) | Đã chạy đủ 6 tổ hợp `{ce, emd, corn} × {unweighted, weighted}` trên `fold 0–2` (Split B & A, `reports/raw/stage4_summarize_results.txt`): `C3_ce_unweighted_ridge_selfcorr` đạt đỉnh trung bình (`0.4179 ± 0.0230` trên Split B; `0.6509 ± 0.0074` trên Split A) $\to$ chốt `ce` không trọng số lớp cho `cand_A` | **Không** | **Đã chọn trên `val_select` fold 0–2 (Giai đoạn 4)** |
 
 ---
 
 ### 1.5. Siêu tham số Thành phần `C4` (Tiên đoán Bảo toàn Thứ tự Liên thông Hậu kiểm)
 
-| Siêu tham số | Khóa trong `cfg` / vị trí code | Giá trị hiện tại | Cách đã chọn / Nguồn gốc | Có dùng `test`? | Trạng thái |
+| Siêu tham số | Khóa trong `cfg` / vị trí code | Giá trị ở `cand_A` | Cách đã chọn / Nguồn gốc | Có dùng `test`? | Trạng thái |
 | :--- | :--- | :---: | :--- | :---: | :--- |
 | Mức sai số mục tiêu $\alpha$ | `c4_alpha` (`conformal.py`) | `0.10` (Độ phủ mục tiêu $90\%$) | Mức tin cậy thống kê tiêu chuẩn đặt trước ($1 - \alpha = 90\%$); ngưỡng $\hat{q}_{1-\alpha}$ tính hoàn toàn trên `val_calib` (10%) | **Không** | Cố định theo định nghĩa bài toán |
 
@@ -66,30 +65,32 @@
 
 ### 1.6. Siêu tham số Thành phần `C5` (Phân cụm Phổ Đa khung nhìn & Nhãn mềm Leave-One-Out)
 
-| Siêu tham số | Khóa trong `cfg` / vị trí code | Giá trị hiện tại | Cách đã chọn / Nguồn gốc | Có dùng `test`? | Trạng thái |
+| Siêu tham số | Khóa trong `cfg` / vị trí code | Giá trị ở `cand_A` | Cách đã chọn / Nguồn gốc | Có dùng `test`? | Trạng thái |
 | :--- | :--- | :---: | :--- | :---: | :--- |
-| Khoảng duyệt số cụm $[K_{\min}, K_{\max}]$ | `c5_k_min`, `c5_k_max` (`soft_labels.py`) | `[4, 12]` và `[4, 24]` | Do $K^* = 12$ chạm cận trên của `[4, 12]`, bổ sung khoảng `[4, 24]` trong ablation C5 và báo cáo $K^*$ từng fold cho cả hai khoảng | **Không** | So sánh `[4, 12]` và `[4, 24]` trong ablation C5 |
+| Khoảng duyệt số cụm $[K_{\min}, K_{\max}]$ | `c5_k_min`, `c5_k_max` (`soft_labels.py`) | `[4, 12]` | Đã kiểm chứng trên Fold 0–2 (`reports/raw/c5_k_ranges_fold012.txt`): khoảng `[4, 12]` và `[4, 24]` cho cùng $K^* = (12, 5, 4)$ ở Split B và $(6, 6, 12)$ ở Split A; tự chọn $K^*$ có trung bình Macro-F1 ngang `fixedK6` (`0.3701` vs `0.3693`) nhưng giảm phương sai giữa các fold từ `± 0.0268` xuống `± 0.0091` | **Không** | Cố định `[4, 12]` |
 | Trọng số tiêu chí chọn $K^*$ | `0.6 * Silhouette + 0.4 * NormEigengap` (`soft_labels.py` L131) | `(0.6, 0.4)` | Chỉ dùng ma trận tương đồng trên `train_drugs` (hoàn toàn không dùng nhãn `val` hay `test`) | **Không** | Cố định |
 | Trọng số ghép các view khi phân cụm | `c5_view_weighting` (`soft_labels.py`) | `'uniform'` | Trung bình đều các Laplacian chuẩn hóa đối xứng trên `train_drugs` | **Không** | Cố định |
-| **Hệ số trộn nhãn mềm $\alpha_{\text{c5}}$** | `c5_alpha` (`experiments.py`) | `0.15` | Khởi tạo heuristic ban đầu ($0.15$), **chưa chọn trên `val_select`** | **Không** | **Sẽ tune trên `val_select` fold 0–2 (trong ngân sách $\le 6$ cấu hình)** |
-| **Ngưỡng số láng giềng tối thiểu $m_{\min}$** | `c5_min_samples` (`experiments.py`) | `5` | Khởi tạo heuristic ban đầu ($5$), **chưa chọn trên `val_select`** | **Không** | **Sẽ tune trên `val_select` fold 0–2 (trong ngân sách $\le 6$ cấu hình)** |
-| Trọng số nhánh phụ `aux_cluster_head` | `c5_aux_cluster_weight` (`experiments.py`) | `0.0` (Mặc định **TẮT** trong `MSSF_plus_full`) | Đã tắt mặc định theo Thay đổi 2; chỉ kiểm tra ở dòng ablation `C5_multi_view_aux` (`0.05`) trên `val_select` | **Không** | Mặc định TẮT |
-| Siêu tham số đối chứng `C5_knn` / `C5_single_view` | `c5_knn_k=15`, `c5_single_view_name='D5_stitch_five'` | `15`, `'D5_stitch_five'` | Chỉ dùng cho 2 dòng đối chứng trong bảng ablation `C5` | **Không** | Cố định |
+| Hệ số trộn nhãn mềm $\alpha_{\text{c5}}$ | `c5_alpha` (`experiments.py`) | `0.15` | Giá trị chuẩn cố định xuyên suốt toàn bộ thực nghiệm C5 (`0.15`) | **Không** | Cố định (`0.15`) |
+| Ngưỡng số láng giềng tối thiểu $m_{\min}$ | `c5_min_samples` (`experiments.py`) | `5` | Giá trị chuẩn cố định xuyên suốt toàn bộ thực nghiệm C5 (`5`) | **Không** | Cố định (`5`) |
+| Trọng số nhánh phụ `aux_cluster_head` | `c5_aux_cluster_weight` (`experiments.py`) | `0.0` (**TẮT** ở `cand_A`) | Đã kiểm chứng trên `val_select` Fold 0–2 (`C5_multi_view` `0.3701 ± 0.0091` $\ge$ `C5_multi_view_aux` `0.3665 ± 0.0115`) $\to$ tắt hoàn toàn ở `cand_A` | **Không** | Đã tắt (`0.0`) |
 
 ---
 
-## 2. Kế hoạch Sử dụng Ngân sách Tune $\le 6$ Cấu hình Số (Bước 4 — Sau khi chốt C3)
+## 2. Giải trình & Quy trình Chọn Minh bạch $p_{\text{cold}} \in \{0.15, 0.25\}$ cho `cand_A` trên `val_select` (Fold 0–2, Split B)
 
-Sau khi chọn xong hàm mục tiêu `C3` tốt nhất từ thực nghiệm fold `0–2` trên `val_select` (Bước 3), toàn bộ ngân sách tinh chỉnh $\le 6$ cấu hình số của `MSSF_plus` sẽ được dùng để chọn bộ ba siêu tham số liên tục chưa được chọn trên `val_select` gồm `(c1_view_dropout_prob, c5_alpha, c5_min_samples)` trên `fold 0–2` (cả Split A và Split B):
+1. **Giải trình về con số `0.15` vs `0.25` trước đó**:
+   - Trong mã nguồn [`MSSF_plus/configs/experiments.py`](file:///Users/buihung/project_DL/DSE/MSSF_plus/configs/experiments.py#L457-L470), cấu hình `cand_A` đã chạy trên Folds 0–2 thực tế đặt **`c1_view_dropout_prob = 0.25`** và **`c5_alpha = 0.15`**.
+   - Việc ghi `vdrop_only (p = 0.15)` trong văn bản tóm tắt trước đó là do nhầm giá trị của `c5_alpha = 0.15` sang `c1_view_dropout_prob`; thực tế tại thời điểm đó $p_{\text{cold}}$ vẫn đang giữ ở mức khởi tạo heuristic `0.25` và **chưa được so sánh trực tiếp với `0.15` trên `val_select`**.
+2. **So sánh thực nghiệm minh bạch $p_{\text{cold}} \in \{0.15, 0.25\}$ trên `val_select` (Fold 0–2, Split B)**:
+   - Hai cấu hình đối chiếu trong `MSSF_plus/configs/experiments.py`:
+     - **`cand_A_p015`**: `cand_A` với `c1_view_dropout_prob = 0.15`
+     - **`cand_A`**: `cand_A` với `c1_view_dropout_prob = 0.25` *(đã chạy xong trên Fold 0–2, Split B: Macro-F1 = `0.4107 ± 0.0259`, từng fold `[0.4260, 0.3742, 0.4319]`)*
+   - Lệnh chạy và xuất bảng nguyên văn từ `.npy`:
+     ```bash
+     python3 -m MSSF_plus.scripts.run_p_cold_selection \
+         --splits B --mode dev --device cuda \
+         --results_dir /content/DSE/results_v2 \
+         --drive_dir /content/drive/MyDrive/DSE_results_v2
+     ```
+   - **Quy tắc chọn**: So sánh theo cặp fold trên `val_select` (Fold 0–2, Split B); nếu chênh lệch trung bình nhỏ hơn $1\text{ Std}$ giữa các fold thì giữ giá trị mặc định `0.25`, ngược lại chọn giá trị có `val_select` Macro-F1 cao hơn. Kết quả nguyên văn được lưu tại `reports/raw/p_cold_selection_summarize_results.txt`.
 
-| Thứ tự cấu hình | `c1_view_dropout_prob` | `c5_alpha` | `c5_min_samples` | Mục đích kiểm tra trên `val_select` (fold 0–2) |
-| :---: | :---: | :---: | :---: | :--- |
-| **Config 1** *(Mặc định hiện tại)* | `0.25` | `0.15` | `5` | Điểm neo tham chiếu (đã chạy sẵn trong bước chọn C3, tốn 0 lượt chạy mới) |
-| **Config 2** | `0.15` | `0.15` | `5` | Giảm tỷ lệ ẩn profile view khi train ($p_{\text{drop}} = 0.15$) |
-| **Config 3** | `0.35` | `0.15` | `5` | Tăng tỷ lệ giả lập cold-start khi train ($p_{\text{drop}} = 0.35$) |
-| **Config 4** | *(Tốt nhất từ 1–3)* | `0.10` | `5` | Làm trơn nhãn mềm bảo thủ hơn ($\alpha_{\text{c5}} = 0.10$) |
-| **Config 5** | *(Tốt nhất từ 1–3)* | `0.25` | `5` | Tăng đóng góp phân phối cụm phổ ($\alpha_{\text{c5}} = 0.25$) |
-| **Config 6** | *(Tốt nhất từ 1–5)* | *(Tốt nhất từ 1–5)* | `3` (hoặc `8`) | Kiểm tra độ nhạy ngưỡng số láng giềng tối thiểu trong cụm $m_{\min}$ |
-
-- **Tổng số cấu hình số được thử**: đúng **6 cấu hình** (trong đó Config 1 dùng lại trực tiếp từ Bước 3, chỉ cần chạy thêm 5 cấu hình mới trên fold 0–2).
-- **Quy tắc chọn**: Chọn cấu hình có trung bình `Macro-F1` trên `val_select` (fold 0–2, xét đồng thời Split B và Split A) cao nhất; nếu chênh lệch nhỏ hơn độ lệch chuẩn giữa các fold, giữ giá trị mặc định đơn giản hơn.

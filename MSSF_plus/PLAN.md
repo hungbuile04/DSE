@@ -58,73 +58,54 @@ MSSF_plus/
 ### 2.3. `views.py` (C1 & C2)
 - `build_fold_views(fold_split: FoldSplit, cfg: dict, device='cpu') -> FoldViews`:
   1. **Dựng ma trận `drug_side_train` (`750 × 994`)**: khởi tạo `np.zeros((750, 994))` và chỉ điền các cặp thuộc `fold_split.train` (80%).
-  2. **Tính 4 view profile**: `D9_profile_freq_cos`, `D10_profile_bin_cos` (`750 × 750`) và `S3_profile_freq_cos`, `S4_profile_bin_cos` (`994 × 994`) từ `drug_side_train`.
+  2. **Tính 4 view profile (`profile_self_correction=True`)**: `D9_profile_freq_cos`, `D10_profile_bin_cos` (`750 × 750`) và `S3_profile_freq_cos`, `S4_profile_bin_cos` (`994 × 994`) từ `drug_side_train` theo đúng công thức loại tự tương tác của `MSSF/similarity_load.py`.
   3. **C2 — Chế độ SE views (`c2_se_mode`)**:
      - `'original'`: `[S1_adrecs, S2_glove, S3_freq, S4_bin]` (4 views, `3976-D`).
-     - `'plus_ontology'`: `[S1_adrecs, S2_glove, S3_freq, S4_bin, S5_meddra_cos]` (5 views, `4970-D`), với `S5_meddra_cos = cosine_similarity(side_effect_label_750.mat['node_label'])`.
+     - `'plus_ontology'` (**chốt ở mô hình cuối `cand_A`**): `[S1_adrecs, S2_glove, S3_freq, S4_bin, S5_meddra_cos]` (5 views, `4970-D`), với `S5_meddra_cos = cosine_similarity(side_effect_label_750.mat['node_label'])`.
      - `'no_profile'`: `[S1_adrecs, S2_glove, S5_meddra_cos]` (3 views, `2982-D`, bỏ hoàn toàn `S3, S4`).
-  4. **C1 — Availability Indicator**:
-     - Với mỗi thuốc $d$ và drug view $v$: `drug_avail[d, v] = 1.0` nếu $\sum_{j \neq d} |S^{(v)}_{d,j}| > 0$, ngược lại `0.0`.
-     - Với mỗi SE $s$ và SE view $u$: `se_avail[s, u] = 1.0` nếu $\sum_{j \neq s} |S^{(u)}_{s,j}| > 0$, ngược lại `0.0`.
-  5. **C1 — Chiến lược xử lý view profile thiếu (`c1_impute`)**:
-     - `'zero'`: giữ nguyên vector `0` ở `D9, D10` cho các thuốc không có cặp train.
-     - `'drop'`: loại bỏ `D9, D10` khỏi danh sách drug views (chỉ dùng 9 drug views tĩnh `[D1..D8, D11]`, `6750-D`).
-     - `'mean'`: điền hàng `D9[d], D10[d]` của các thuốc thiếu profile ($a_{d,\text{D9}}=0$) bằng vector trung bình của các thuốc thuộc `train_drugs`.
-     - `'regress'`: huấn luyện $K=5$ mạng MLP `ProfileViewRegressor` theo cơ chế **Cross-Fitting theo thuốc** trên `train_drugs` (chia `train_drugs` thành $K=5$ nhóm, mỗi regressor train trên 4 nhóm với 10% early-stopping nội bộ và dự đoán out-of-fold cho nhóm thứ 5 làm `fallback_d9, fallback_d10`), sau đó dùng trung bình cộng của $K=5$ regressor để điền cho mọi thuốc cold-start có $a_{d,\text{D9}} = 0$ (`valsel`, `valcal`, `test` ở Split B).
-     - `'diffusion'`: áp dụng cùng cơ chế Cross-Fitting $K=5$ cho `ConditionalDenoiserMLP`; chỉ giữ làm 1 dòng đối chứng trong bảng Ablation C1 (trên dev folds) do MSE trên `val_select` kém hơn `mean` và `regress`.
+  4. **C1 — Rút gọn ở mô hình cuối `cand_A` còn "Mô phỏng Cold-Start khi Huấn luyện" (`c1_impute='zero'`, `c1_use_availability=False`, `use_bvi=False`)**:
+     - Giữ nguyên vector `0` ở `D9, D10` cho các thuốc cold-start (`c1_impute='zero'`); trong lúc train (`model.train()`), ngẫu nhiên đặt `D9, D10` của thuốc warm-start về `0` với xác suất $p_{\text{cold}}$ (`c1_view_dropout_prob`).
+     - Các biến thể bù khuyết (`regress_ridge`, `regress_knn`, `regress` MLP, `mean`, `drop`) và `AvailabilityModulator` chỉ giữ trong bảng Ablation Giai đoạn 4 (trên Folds 0–2) để chứng minh đóng góp thực sự của C1 đến từ View Dropout.
 
-### 2.4. `model.py` (Giữ nguyên 3 Encoder + Self-Attention + BVI, mở rộng C1 & C5)
+### 2.4. `model.py` (3 Encoder + Self-Attention + Chiếu Tất định `use_bvi=False` ở `cand_A`)
 - `MSSFPlusModel(nn.Module)`:
-  - Hỗ trợ số lượng drug views $V_d \in \{9, 11\}$ và SE views $V_s \in \{3, 4, 5\}$ tự động trong `EncoderConnection`, `EncoderAddition`, `Preprocess`, và `CrossProduction` ($V_d \times V_s$ kênh).
-  - Khi `c1_use_availability=False`, `c1_impute='zero'`, `c2_se_mode='original'`, `c3_loss_type='ce'`, `c5_mode='none'`, kiến trúc và số tham số **trùng khớp 100% với `Mulmodel` gốc của MSSF**.
-  - Khi `c1_use_availability=True`: module `AvailabilityModulator` xử lý trước khi vào 3 encoder:
-    - Với mỗi view $v$, học bộ hệ số điều biến nhẹ $\gamma_v(a_d) \in \mathbb{R}^{750}$ và vector bù khuyết $b_v(a_d) \in \mathbb{R}^{750}$ (khởi tạo $\gamma_v = 1, b_v = 0$):
-      $$\tilde{x}^{(v)}_d = \gamma_v(a_d) \odot x^{(v)}_d + (1 - a_{d,v}) \cdot b_v(a_d)$$
-    - Hỗ trợ **View Dropout khi train (`c1_view_dropout_prob`)**: trong `model.train()`, với xác suất $p_{\text{drop}}$, ngẫu nhiên thay view profile `D9, D10` của thuốc train bằng vector dự phòng out-of-fold (`fallback_d9, fallback_d10`) và hạ bit $a_{d,\text{D9}} = a_{d,\text{D10}} = 0$.
-  - Đầu ra phân lớp: `5` logits cho `ce` / `emd`, hoặc `4` logits cho `corn` (kèm hàm `predict_proba(logits)` quy đổi thống nhất về xác suất 5 lớp `(batch, 5)`). Nhánh phụ `aux_cluster_head` mặc định **TẮT** (`c5_aux_cluster_weight = 0.0`) trong `MSSF_plus_full`.
+  - Hỗ trợ số lượng drug views $V_d \in \{9, 11\}$ và SE views $V_s \in \{3, 4, 5\}$ tự động trong `EncoderConnection`, `EncoderAddition`, `Preprocess`, và `CrossProduction` phân rã đại số (`use_factored_crossprod=True`).
+  - Ở mô hình cuối **`cand_A`**: `c1_use_availability=False`, `c1_impute='zero'`, `c1_view_dropout_prob` $\in \{0.15, 0.25\}$ (chọn trên `val_select`), `c2_se_mode='plus_ontology'`, `c3_loss_type='ce'`, `c3_class_weighting=False`, `c5_mode='multi_view'`, `use_bvi=False`, `profile_self_correction=True`.
+  - Khi `use_bvi=False` (`cand_A`), nhánh biến phân `GaussianParametrizer` $(\mu, \log\sigma^2)$ được thay bằng phép chiếu tuyến tính tất định `det_proj: Linear(384, 64)`. Kết quả độ bất định hậu nghiệm $\sigma$ từ cấu hình chẩn đoán giữ BVI (`C1_avail_only`, `loo_no_C1` vs `C3_ce_unweighted_ridge_selfcorr`) được giữ làm **phân tích phụ (supplementary analysis)** cho paper.
 
-### 2.5. `losses.py` (C3 — Lựa chọn hàm mục tiêu thứ tự)
+### 2.5. `losses.py` (C3 — Hàm mục tiêu của `cand_A`)
 - `MSSFPlusCriterion(nn.Module)`:
-  - Loss phụ của MSSF gốc (giữ nguyên trọng số, không coi là thành phần mới): `0.001 * KL + 0.0001 * RecCon + 0.0001 * RecAdd`.
-  - Loss chính (`c3_loss_type` — đã gỡ bỏ `ce_softquant` khỏi `MSSF_plus`):
-    - `'ce'`: Cross-entropy (hỗ trợ cả nhãn cứng `0..4` và nhãn mềm `soft_target` `(batch, 5)` từ C5).
-    - `'emd'`: Squared Earth Mover's Distance trên CDF của `softmax(logits)` và CDF của target.
-    - `'corn'`: CORN binary cross-entropy trên 4 ngưỡng $y > k$ ($k=0..3$); với nhãn mềm $q$, chuyển trực tiếp sang target tích lũy $P(y > k) = \sum_{j > k} q_j$.
-  - Cờ độc lập `c3_class_weighting: bool`: nhân trọng số nghịch tần suất chuẩn hoá $w_k = \frac{N_{\text{train}}}{5 N_{\text{train}, k}}$.
+  - Ở mô hình cuối `cand_A` (`c3_loss_type='ce'`, `c3_class_weighting=False`, `use_bvi=False`), hàm mất mát huấn luyện là:
+    $$\mathcal{L}_{\text{cand\_A}} = \mathcal{L}_{\text{CE}}(\text{logits}, q) + 10^{-4}\mathcal{L}_{\text{rec,con}} + 10^{-4}\mathcal{L}_{\text{rec,add}}$$
+  - Trong Ablation Giai đoạn 4, 6 tổ hợp `{ce, emd, corn} × {unweighted, weighted}` đã được đối chiếu trên `val_select` (Folds 0–2, cả hai split) để chọn `ce` không trọng số lớp.
 
 ### 2.6. `soft_labels.py` (C5)
 - `build_soft_targets(fold_split, fold_views, cfg) -> SoftLabelResult`:
   - `c5_mode in {'none', 'knn', 'single_view', 'multi_view'}`:
     - Chuẩn hoá từng ma trận tương đồng thuốc trên `train_drugs`, hợp nhất đa view, chạy Spectral Clustering trên đồ thị tương đồng của `train_drugs`.
-    - Tự động chọn số cụm $K \in [c5\_k\_min, c5\_k\_max]$ bằng kết hợp eigengap và Silhouette score trên `train_drugs` (ghi $K$ vào log/config).
-    - Với mỗi cặp train $(d, s)$ có $d \in c$: tính phân phối 5 lớp $P_{c,s}^{(-d)}$ chỉ trên các cặp train $(d', s)$ với $d' \in c, d' \neq d$ (**bắt buộc loại chính $d$**). Nếu số mẫu $< \text{min\_samples}$ (mặc định `3`) thì giữ nguyên `onehot(y)`, ngược lại:
-      $$q_{d,s} = (1 - \lambda)\,\text{onehot}(y) + \lambda\, P_{c,s}^{(-d)}$$
+    - Tự động chọn số cụm $K \in [c5\_k\_min, c5\_k\_max]$ (`[4, 12]`) bằng kết hợp eigengap và Silhouette score trên `train_drugs` (trung bình Macro-F1 ngang với `fixedK6` nhưng giảm phương sai giữa các fold từ `± 0.0268` xuống `± 0.0091`).
+    - Với mỗi cặp train $(d, s)$ có $d \in c$: tính phân phối 5 lớp $P_{c,s}^{(-d)}$ chỉ trên các cặp train $(d', s)$ với $d' \in c, d' \neq d$ (**bắt buộc loại chính $d$**). Nếu số mẫu $< \text{min\_samples}$ (`5`) thì giữ nguyên `onehot(y)`, ngược lại:
+      $$q_{d,s} = (1 - \alpha_{\text{c5}})\,\text{onehot}(y) + \alpha_{\text{c5}}\, P_{c,s}^{(-d)}, \qquad \alpha_{\text{c5}} = 0.15$$
 
 ### 2.7. `conformal.py` (C4)
 - `evaluate_all_conformal_methods(valcal_probs, valcal_labels_class, test_probs, test_labels_class, alpha=0.10, test_drug_ids=None) -> dict`:
   - Hiệu chỉnh ngưỡng $\hat{q}_{1-\alpha}$ trên `val_calib` với quy tắc lượng tử hữu hạn mẫu $\lceil (n + 1)(1 - \alpha) \rceil / n$.
   - 4 phương pháp: `LAC`, `APS`, `Ordinal_LAC`, và `Ordinal_APS`.
-  - Báo cáo ở mức $90\%$: `coverage`, `coverage_c0..c4`, `avg_set_size`, `singleton_rate`, `contiguity_rate`, và thống kê độ phủ theo từng thuốc test (`drug_coverage_mean`, `drug_coverage_std`, `drug_coverage_lt80_rate`).
+  - Báo cáo ở mức $90\%$: `coverage`, `coverage_c0..c4`, `avg_set_size`, `singleton_rate`, `contiguity_rate`, và thống kê độ phủ theo từng thuốc (`drug_coverage_mean`, `drug_coverage_std`, `drug_coverage_lt80_rate`).
 
 ---
 
-## 3. Bảng Kế hoạch Ablation Bắt buộc (`configs/experiments.py`)
+## 3. Bảng Cấu hình Thực nghiệm Chính & Leave-One-Out trên Mô hình Cuối `cand_A` (`configs/experiments.py`)
 
-| Nhóm | Tên cấu hình (`exp_id`) | C1 (`impute` / `avail` / `vdrop`) | C2 (`se_mode`) | C3 (`loss` / `cw`) | C5 (`soft_label` / `aux`) | C4 (`conformal`) | Split chạy |
-| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **0. Baseline** | `MSSF_v2` | `zero` / `False` / `0.0` | `original` | `ce` / `False` | `none` / `0.0` | Post-hoc | A, B |
-| **1. C1 (Views)** | `C1_avail_only` | `zero` / `True` / `0.0` | `original` | `ce` / `False` | `none` / `0.0` | — | A, B |
-| | `C1_vdrop_only` | `zero` / `False` / `0.25` | `original` | `ce` / `False` | `none` / `0.0` | — | A, B |
-| | `C1_avail_vdrop_zero`, `C1_avail_vdrop_drop` | `zero, drop` / `True` / `0.25` | `original` | `ce` / `False` | `none` / `0.0` | — | A, B |
-| | `C1_avail_vdrop_mean`, `C1_avail_vdrop_regress` | `mean, regress` / `True` / `0.25` | `original` | `ce` / `False` | `none` / `0.0` | — | A, B |
-| | `C1_regress_no_modulator` *(Mới)* | `regress` / `False` / `0.25` | `original` | `ce` / `False` | `none` / `0.0` | — | A, B |
-| | `C1_avail_vdrop_diffusion` *(Chỉ chạy dev folds)* | `diffusion` / `True` / `0.25` | `original` | `ce` / `False` | `none` / `0.0` | — | A, B (dev) |
-| **2. C2 (SE)** | `C2_plus_ontology`, `C2_no_profile` | `zero` / `False` / `0.0` | `plus_ontology, no_profile` | `ce` / `False` | `none` / `0.0` | — | A, B |
-| **3. C3 (Loss)** | `C3_{ce,emd,corn}_{unweighted,weighted}` (6 tổ hợp) | `regress` / `True` / `0.25` | `plus_ontology` | `{ce,emd,corn}` / `{F,T}` | `multi_view` / `0.0` | — | A, B |
-| **4. C5 (Soft)** | `C5_knn`, `C5_single_view`, `C5_multi_view` | `zero` / `False` / `0.0` | `original` | `ce` / `False` | `{knn,single,multi}` / `0.0` | — | A, B |
-| | `C5_multi_view_aux` | `zero` / `False` / `0.0` | `original` | `ce` / `False` | `multi_view` / `0.05` | — | A, B |
-| **5. Full & LOO** | `MSSF_plus_full` | `regress` / `True` / `0.25` | `plus_ontology` | Best C3 | `multi_view` / `0.0` | `LAC, APS, Ord` | A, B |
-| | `loo_no_C1`, `loo_no_C2`, `loo_no_C3`, `loo_no_C5` | Bỏ lần lượt từng thành phần khỏi `MSSF_plus_full` | | | | Post-hoc | A, B |
+| Nhóm | Tên cấu hình (`exp_id`) | C1 (`vdrop` / `impute` / `avail`) | C2 (`se_mode`) | C3 (`loss` / `cw`) | C5 (`soft_label`) | BVI (`use_bvi`) | Vai trò / Phạm vi chạy |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
+| **0. Baseline Nội bộ** | `MSSF_v2_selfcorr` | `0.0` / `zero` / `False` | `original` | `ce` / `False` | `none` | `True` | 10 folds (Split A & B) |
+| **1. Mô hình Cuối** | `cand_A` | $p_{\text{cold}}$ / `zero` / `False` | `plus_ontology` | `ce` / `False` | `multi_view` | `False` | **Mô hình cuối** — 10 folds (Split A & B) |
+| **2. 4 Cấu hình LOO trên `cand_A`** | `cand_A_loo_no_vdrop` | `0.0` / `zero` / `False` | `plus_ontology` | `ce` / `False` | `multi_view` | `False` | Bỏ `vdrop` — 10 folds (Split A & B) |
+| | `cand_A_loo_no_C2` | $p_{\text{cold}}$ / `zero` / `False` | `original` | `ce` / `False` | `multi_view` | `False` | Bỏ `C2` — 10 folds (Split A & B) |
+| | `cand_A_loo_no_C5` | $p_{\text{cold}}$ / `zero` / `False` | `plus_ontology` | `ce` / `False` | `none` | `False` | Bỏ `C5` — 10 folds (Split A & B) |
+| | `cand_A_loo_no_all` | `0.0` / `zero` / `False` | `original` | `ce` / `False` | `none` | `False` | Bỏ cả ba (`vdrop, C2, C5`) — 10 folds (Split A & B) |
+| **3. Phân tích phụ $\sigma$** | `C1_avail_only`, `loo_no_C1`, `C3_ce_unweighted_ridge_selfcorr` | — | — | — | — | `True` | Chẩn đoán $\sigma$ (Folds 0–2, Split A & B) |
 
 ---
 

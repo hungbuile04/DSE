@@ -82,6 +82,18 @@ ABLATION_GROUPS: Dict[str, List[str]] = {
         'cand_C',
         'cand_D',
     ],
+    'p_cold': [
+        'cand_A_p015',
+        'cand_A',
+    ],
+    'cand_A_loo': [
+        'MSSF_v2_selfcorr',
+        'cand_A',
+        'cand_A_loo_no_vdrop',
+        'cand_A_loo_no_C2',
+        'cand_A_loo_no_C5',
+        'cand_A_loo_no_all',
+    ],
 }
 
 
