@@ -378,6 +378,72 @@ def format_markdown_tables(
                 f"{fm['F1_c3']:.4f} | {fm['F1_c4']:.4f} |"
             )
 
+    # 2c. Paired fold comparison for final model candidates (cand_A, cand_B, cand_C, cand_D)
+    cand_order = [
+        ('cand_A', 1, 'vdrop_only + C2 + C5 + CE, no BVI, no impute, no mod'),
+        ('cand_B', 2, 'cand_A + modulator (no impute)'),
+        ('cand_C', 2, 'cand_A + ridge impute (no mod)'),
+        ('cand_D', 3, 'full_no_bvi (cand_A + modulator + ridge impute)'),
+    ]
+    present_cands = [c for c in cand_order if c[0] in collected]
+    if len(present_cands) >= 2:
+        lines.append(
+            f"\n### 2c. Paired Fold Comparison & Simplicity-Aware Candidate Selection (`cand_A..cand_D`, {target_label})"
+        )
+        cand_fold_maps: Dict[str, Dict[int, float]] = {}
+        cand_means: Dict[str, float] = {}
+        cand_stds: Dict[str, float] = {}
+        for c_name, _, _ in present_cands:
+            c_data = collected[c_name]
+            src = c_data['valsel'] if eval_target == 'valsel' else c_data['cls']
+            if src is not None and 'per_fold' in src:
+                f_map = {int(f_i): float(fm['MacroF1']) for f_i, fm in zip(c_data['folds'], src['per_fold'])}
+                cand_fold_maps[c_name] = f_map
+                cand_means[c_name] = float(src['mean']['MacroF1'])
+                cand_stds[c_name] = float(src['std']['MacroF1'])
+
+        if cand_means:
+            best_cand = max(cand_means.keys(), key=lambda k: cand_means[k])
+            best_mean = cand_means[best_cand]
+            best_std = cand_stds[best_cand]
+            ref_cand = 'cand_A' if 'cand_A' in cand_fold_maps else present_cands[0][0]
+            common_folds = sorted(
+                set.intersection(*(set(m.keys()) for m in cand_fold_maps.values()))
+            )
+            fold_cols = " | ".join([f"Fold {f}" for f in common_folds])
+            fold_align = "|".join(["---:" for _ in common_folds])
+            lines.append(
+                f"| Candidate | Complexity Rank | Description | {fold_cols} | Mean ± Std | Paired $\\Delta$ vs `{ref_cand}` (Per-Fold) | Paired $\\Delta$ vs `{ref_cand}` (Mean ± Std) | $|\\Delta\\text{{ vs best}}| < 1\\,\\text{{Std}}$ |"
+            )
+            lines.append(f"|---|---:|---|{fold_align}|---:|---|---:|---|")
+            selected_cand = None
+            for c_name, c_rank, c_desc in present_cands:
+                if c_name not in cand_fold_maps:
+                    continue
+                f_map = cand_fold_maps[c_name]
+                f_vals_str = " | ".join([f"{f_map[f]:.4f}" for f in common_folds])
+                diffs_ref = [f_map[f] - cand_fold_maps[ref_cand][f] for f in common_folds]
+                diffs_ref_str = ", ".join([f"{d:+.4f}" for d in diffs_ref])
+                d_mean = float(np.mean(diffs_ref))
+                d_std = float(np.std(diffs_ref))
+                gap_to_best = abs(best_mean - cand_means[c_name])
+                within_1std = gap_to_best <= max(best_std, cand_stds[c_name])
+                if within_1std and selected_cand is None:
+                    selected_cand = c_name
+                within_str = f"YES ($|\\Delta|={gap_to_best:.4f} \\le {max(best_std, cand_stds[c_name]):.4f}$)" if within_1std else f"NO ($|\\Delta|={gap_to_best:.4f} > {max(best_std, cand_stds[c_name]):.4f}$)"
+                lines.append(
+                    f"| `{c_name}` | {c_rank} | {c_desc} | {f_vals_str} | "
+                    f"{cand_means[c_name]:.4f} ± {cand_stds[c_name]:.4f} | "
+                    f"`[{diffs_ref_str}]` | {d_mean:+.4f} ± {d_std:.4f} | {within_str} |"
+                )
+            if selected_cand is not None:
+                lines.append(
+                    f"\n> **Quy tắc chọn ứng viên (Split {split_type})**: Đỉnh trung bình là `{best_cand}` "
+                    f"(`{best_mean:.4f} ± {best_std:.4f}`). Theo quy tắc ưu tiên cấu hình đơn giản hơn khi chênh lệch "
+                    f"nhỏ hơn 1 độ lệch chuẩn giữa fold, ứng viên được chọn trên Split {split_type} là **`{selected_cand}`** "
+                    f"(`{cand_means[selected_cand]:.4f} ± {cand_stds[selected_cand]:.4f}`)."
+                )
+
     # 3. C4 Conformal table (with per-drug coverage statistics per Change 4)
     c4_key = 'valsel_conformal' if eval_target == 'valsel' else 'conformal'
     has_any_c4 = any(bool(data.get(c4_key)) for data in collected.values())

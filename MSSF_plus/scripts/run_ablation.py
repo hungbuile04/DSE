@@ -76,6 +76,12 @@ ABLATION_GROUPS: Dict[str, List[str]] = {
         'bvi_keep_no_c5',
         'full_no_bvi_no_c5',
     ],
+    'candidates': [
+        'cand_A',
+        'cand_B',
+        'cand_C',
+        'cand_D',
+    ],
 }
 
 
