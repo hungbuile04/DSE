@@ -33,7 +33,7 @@
 
 | Siêu tham số | Khóa trong `cfg` / vị trí code | Giá trị ở `cand_A` | Cách đã chọn / Nguồn gốc | Có dùng `test`? | Trạng thái |
 | :--- | :--- | :---: | :--- | :---: | :--- |
-| **Xác suất mô phỏng Cold-Start khi train ($p_{\text{cold}}$)** | `c1_view_dropout_prob` (`experiments.py`) | So sánh $p_{\text{cold}} \in \{0.15, 0.25\}$ trên `val_select` | Trong lần chạy 4 ứng viên `cand_A..cand_D` (`experiments.py` L460), `cand_A` dùng giá trị khởi tạo heuristic $p_{\text{cold}} = 0.25$ (ghi chú `p = 0.15` trong bản tóm tắt văn bản trước đó là nhầm với `c5_alpha = 0.15`). Để chọn minh bạch trên `val_select`, chạy trực tiếp `cand_A` với $p_{\text{cold}} \in \{0.15, 0.25\}$ (`cand_A_p015` vs `cand_A`) trên Fold 0–2, Split B qua `MSSF_plus/scripts/run_p_cold_selection.py` | **Không** | **Chọn trực tiếp trên `val_select` Fold 0–2, Split B (`{0.15, 0.25}`)** |
+| **Xác suất mô phỏng Cold-Start khi train ($p_{\text{cold}}$)** | `c1_view_dropout_prob` (`experiments.py`) | `0.25` *(ngang `0.15` trên `val_select`: `0.4107 ± 0.0259` vs `0.4130 ± 0.0236`, $|\Delta|=0.0024 \ll 1\text{ Std}$)* | Đã chạy đối chiếu minh bạch $p_{\text{cold}} \in \{0.15, 0.25\}$ (`cand_A_p015` vs `cand_A`) trên `val_select` Fold 0–2, Split B (`reports/raw/p_cold_selection_summarize_results.txt`): chênh lệch trung bình theo cặp fold chỉ là $+0.0024 \pm 0.0027$ ($|\Delta| = 0.0024 \ll 0.0259$), trong khi $p_{\text{cold}} = 0.25$ có khoảng cách tổng quát hóa `Gap (tr - val)` thấp hơn rõ rệt (`+0.3088 ± 0.0523` so với `+0.3960 ± 0.0218` của `0.15`) $\to$ giữ mặc định `0.25` cho `cand_A` | **Không** | **Đã chọn trên `val_select` Fold 0–2, Split B (`{0.15, 0.25}`)** |
 | Chiến lược bù khuyết | `c1_impute` (`views.py`) | `'zero'` (Không bù khuyết ở `cand_A`) | Đã kiểm chứng qua Ablation Giai đoạn 4 và `cand_A..cand_D` trên `val_select`: bỏ bù khuyết ở mô hình cuối `cand_A` (`c1_impute='zero'`). Các cấu hình có bù khuyết (`regress_ridge`, `regress_knn`, `regress` MLP, `mean`) chỉ giữ trong bảng Ablation Giai đoạn 4 và phân tích phụ $\sigma$ | **Không** | **Đã loại bỏ khỏi mô hình cuối `cand_A`** |
 | Bộ điều biến hiện diện `AvailabilityModulator` | `c1_use_availability` (`model.py`) | `False` (Tắt ở `cand_A`) | Đã kiểm chứng qua `cand_A` vs `cand_B` trên `val_select` Fold 0–2 ($|\Delta| < 1\text{ Std}$): bỏ `AvailabilityModulator` ở mô hình cuối `cand_A` | **Không** | **Đã loại bỏ khỏi mô hình cuối `cand_A`** |
 
@@ -76,21 +76,22 @@
 
 ---
 
-## 2. Giải trình & Quy trình Chọn Minh bạch $p_{\text{cold}} \in \{0.15, 0.25\}$ cho `cand_A` trên `val_select` (Fold 0–2, Split B)
+## 2. Giải trình & Kết quả Chọn Minh bạch $p_{\text{cold}} \in \{0.15, 0.25\}$ cho `cand_A` trên `val_select` (Fold 0–2, Split B)
 
 1. **Giải trình về con số `0.15` vs `0.25` trước đó**:
    - Trong mã nguồn [`MSSF_plus/configs/experiments.py`](file:///Users/buihung/project_DL/DSE/MSSF_plus/configs/experiments.py#L457-L470), cấu hình `cand_A` đã chạy trên Folds 0–2 thực tế đặt **`c1_view_dropout_prob = 0.25`** và **`c5_alpha = 0.15`**.
-   - Việc ghi `vdrop_only (p = 0.15)` trong văn bản tóm tắt trước đó là do nhầm giá trị của `c5_alpha = 0.15` sang `c1_view_dropout_prob`; thực tế tại thời điểm đó $p_{\text{cold}}$ vẫn đang giữ ở mức khởi tạo heuristic `0.25` và **chưa được so sánh trực tiếp với `0.15` trên `val_select`**.
-2. **So sánh thực nghiệm minh bạch $p_{\text{cold}} \in \{0.15, 0.25\}$ trên `val_select` (Fold 0–2, Split B)**:
-   - Hai cấu hình đối chiếu trong `MSSF_plus/configs/experiments.py`:
-     - **`cand_A_p015`**: `cand_A` với `c1_view_dropout_prob = 0.15`
-     - **`cand_A`**: `cand_A` với `c1_view_dropout_prob = 0.25` *(đã chạy xong trên Fold 0–2, Split B: Macro-F1 = `0.4107 ± 0.0259`, từng fold `[0.4260, 0.3742, 0.4319]`)*
-   - Lệnh chạy và xuất bảng nguyên văn từ `.npy`:
-     ```bash
-     python3 -m MSSF_plus.scripts.run_p_cold_selection \
-         --splits B --mode dev --device cuda \
-         --results_dir /content/DSE/results_v2 \
-         --drive_dir /content/drive/MyDrive/DSE_results_v2
-     ```
-   - **Quy tắc chọn**: So sánh theo cặp fold trên `val_select` (Fold 0–2, Split B); nếu chênh lệch trung bình nhỏ hơn $1\text{ Std}$ giữa các fold thì giữ giá trị mặc định `0.25`, ngược lại chọn giá trị có `val_select` Macro-F1 cao hơn. Kết quả nguyên văn được lưu tại `reports/raw/p_cold_selection_summarize_results.txt`.
+   - Việc ghi `vdrop_only (p = 0.15)` trong văn bản tóm tắt trước đó là do nhầm giá trị của `c5_alpha = 0.15` sang `c1_view_dropout_prob`; tại thời điểm đó $p_{\text{cold}}$ vẫn đang ở mức khởi tạo heuristic `0.25` và chưa được đối chiếu với `0.15` trên `val_select`.
 
+2. **Kết quả thực nghiệm đối chiếu $p_{\text{cold}} \in \{0.15, 0.25\}$ trên `val_select` (Fold 0–2, Split B — trích nguyên văn từ `reports/raw/p_cold_selection_summarize_results.txt`)**:
+
+| Method | $p_{\text{cold}}$ | Fold 0 | Fold 1 | Fold 2 | Macro-F1 (`Mean ± Std`) | Weighted-F1 | Accuracy | QWK | MAE | Gap (`tr - val`) | Paired $\Delta$ vs `cand_A` (`0.25`) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `cand_A_p015` | `0.15` | `0.4287` | `0.3796` | `0.4308` | `0.4130 ± 0.0236` | `0.5116 ± 0.0116` | `0.5242 ± 0.0120` | `0.5008 ± 0.0436` | `0.5626 ± 0.0285` | `+0.3960 ± 0.0218` | `[+0.0027, +0.0055, -0.0011]` (`+0.0024 ± 0.0027`) |
+| `cand_A` | `0.25` | `0.4260` | `0.3742` | `0.4319` | `0.4107 ± 0.0259` | `0.5114 ± 0.0179` | `0.5153 ± 0.0248` | `0.4859 ± 0.0599` | `0.5874 ± 0.0548` | `+0.3088 ± 0.0523` | `[+0.0000, +0.0000, +0.0000]` (`+0.0000 ± 0.0000`) |
+
+3. **Kết luận chọn $p_{\text{cold}}$ trên `val_select`**:
+   - Hai giá trị $p_{\text{cold}} = 0.15$ (`0.4130 ± 0.0236`) và $p_{\text{cold}} = 0.25$ (`0.4107 ± 0.0259`) cho hiệu năng `val_select` Macro-F1 **tương đương nhau trong phạm vi sai số giữa các fold**: chênh lệch trung bình theo cặp fold chỉ là **`+0.0024 ± 0.0027`** ($|\Delta| = 0.0024 \ll 1\,\text{Std} = 0.0259$; `0.15` nhỉnh hơn nhẹ ở Fold 0, 1 và `0.25` nhỉnh hơn ở Fold 2).
+   - Xét độ ổn định tổng quát hóa và bảo toàn độ phủ Conformal trên thuốc mới (Split B):
+     - **`cand_A` ($p_{\text{cold}} = 0.25$)** kiểm soát quá khớp tốt hơn hẳn với `Gap (tr - val) = +0.3088 ± 0.0523` (best epoch hội tụ sớm ở `16, 16, 28`), trong khi `cand_A_p015` ($p_{\text{cold}} = 0.15$) có `Gap (tr - val) = +0.3960 ± 0.0218` (best epoch trôi về cuối quá trình train: `50, 38, 49`).
+     - Trên bảng Conformal `Ordinal_APS` ($\alpha = 0.10$), `cand_A` ($p_{\text{cold}} = 0.25$) đạt `Pair Coverage = 0.9027 ± 0.0097` và tỷ lệ thuốc bị thiếu phủ `Drug Cov < 80% = 0.1095 ± 0.0254` (thấp hơn `0.1542 ± 0.0186` của `cand_A_p015`).
+   - Theo đúng quy tắc giữ cấu hình mặc định khi $|\Delta| < 1\,\text{Std}$ giữa các fold (đồng thời có `Gap (tr - val)` nhỏ hơn gần `0.09`), chúng tôi **chốt chính thức $p_{\text{cold}} = 0.25$ (`cand_A`)** cho mô hình cuối.

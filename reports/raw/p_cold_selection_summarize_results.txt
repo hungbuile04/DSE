@@ -1,0 +1,69 @@
+SCRIPT: MSSF_plus/scripts/summarize_results.py
+COMMAND: python -m MSSF_plus.scripts.summarize_results --results_dir /content/DSE/results_v2 --eval_target valsel --ref_method MSSF_v2_selfcorr --splits B --folds 0 1 2 --methods MSSF_v2_selfcorr cand_A cand_A_p015 --out_raw /content/DSE/reports/raw/p_cold_selection_summarize_results.txt --drive_dir /content/drive/MyDrive/DSE_results_v2
+==============================================================================================================
+# MSSF_plus Unified Evaluation Summary (Computed from `.npy`)
+
+## Split B — Validation Selection (`val_select`) Results (`results_v2`)
+
+### 1. Overall & Ordinal Classification Metrics (Validation Selection (`val_select`))
+| Method | Folds | Macro-F1 | Weighted-F1 | Accuracy | QWK | MAE | Gap (tr - val) | Time/Fold (s) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `MSSF_v2_selfcorr` | 3 | 0.3593 ± 0.0095 | 0.4757 ± 0.0088 | 0.5034 ± 0.0321 | 0.4110 ± 0.0054 | 0.6213 ± 0.0764 | +0.3041 ± 0.0396 | 101.1 ± 0.4 |
+| `cand_A` | 3 | 0.4107 ± 0.0259 | 0.5114 ± 0.0179 | 0.5153 ± 0.0248 | 0.4859 ± 0.0599 | 0.5874 ± 0.0548 | +0.3088 ± 0.0523 | 87.4 ± 3.2 |
+| `cand_A_p015` | 3 | 0.4130 ± 0.0236 | 0.5116 ± 0.0116 | 0.5242 ± 0.0120 | 0.5008 ± 0.0436 | 0.5626 ± 0.0285 | +0.3960 ± 0.0218 | 85.9 ± 3.6 |
+
+### 2. Per-Class F1 Breakdown (`c0..c4`, Validation Selection (`val_select`))
+| Method | F1_c0 (Very Rare) | F1_c1 (Rare) | F1_c2 (Infrequent) | F1_c3 (Frequent) | F1_c4 (Very Freq) |
+|---|---:|---:|---:|---:|---:|
+| `MSSF_v2_selfcorr` | 0.2379 ± 0.1131 | 0.2972 ± 0.1091 | 0.3608 ± 0.0471 | 0.6381 ± 0.0479 | 0.2623 ± 0.0433 |
+| `cand_A` | 0.2770 ± 0.0138 | 0.3716 ± 0.1303 | 0.4478 ± 0.0462 | 0.6250 ± 0.0179 | 0.3320 ± 0.0932 |
+| `cand_A_p015` | 0.3069 ± 0.0431 | 0.3444 ± 0.0984 | 0.4157 ± 0.0692 | 0.6453 ± 0.0034 | 0.3530 ± 0.0415 |
+
+### 2b. Per-Fold Breakdown (Validation Selection (`val_select`))
+| Method | Fold | Macro-F1 | Weighted-F1 | Accuracy | QWK | MAE | F1_c0 | F1_c1 | F1_c2 | F1_c3 | F1_c4 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `MSSF_v2_selfcorr` | 0 | 0.3536 | 0.4652 | 0.4580 | 0.4141 | 0.7262 | 0.0784 | 0.4183 | 0.4159 | 0.5705 | 0.2848 |
+| `MSSF_v2_selfcorr` | 1 | 0.3516 | 0.4866 | 0.5274 | 0.4034 | 0.5918 | 0.3276 | 0.1538 | 0.3009 | 0.6754 | 0.3003 |
+| `MSSF_v2_selfcorr` | 2 | 0.3726 | 0.4752 | 0.5247 | 0.4156 | 0.5460 | 0.3077 | 0.3194 | 0.3658 | 0.6684 | 0.2017 |
+| `cand_A` | 0 | 0.4260 | 0.5338 | 0.5465 | 0.5386 | 0.5221 | 0.2766 | 0.4945 | 0.5073 | 0.6491 | 0.2026 |
+| `cand_A` | 1 | 0.3742 | 0.4899 | 0.4859 | 0.4021 | 0.6563 | 0.2604 | 0.1912 | 0.3947 | 0.6060 | 0.4185 |
+| `cand_A` | 2 | 0.4319 | 0.5105 | 0.5133 | 0.5168 | 0.5838 | 0.2941 | 0.4291 | 0.4413 | 0.6200 | 0.3749 |
+| `cand_A_p015` | 0 | 0.4287 | 0.5191 | 0.5272 | 0.5415 | 0.5537 | 0.2667 | 0.4734 | 0.4389 | 0.6433 | 0.3211 |
+| `cand_A_p015` | 1 | 0.3796 | 0.4953 | 0.5082 | 0.4403 | 0.6011 | 0.2874 | 0.2349 | 0.3217 | 0.6426 | 0.4116 |
+| `cand_A_p015` | 2 | 0.4308 | 0.5205 | 0.5370 | 0.5205 | 0.5331 | 0.3667 | 0.3247 | 0.4865 | 0.6500 | 0.3262 |
+
+### 2d. Paired Fold Comparison for `p_cold` Selection (`cand_A` with $p_{\text{cold}} \in \{0.15, 0.25\}$, Validation Selection (`val_select`))
+| Method | $p_{\text{cold}}$ | Description | Fold 0 | Fold 1 | Fold 2 | Mean ± Std | Paired $\Delta$ vs `cand_A` ($p_{\text{cold}}=0.25$) | Paired $\Delta$ (Mean ± Std) |
+|---|---:|---|---:|---:|---:|---:|---|---:|
+| `cand_A_p015` | `0.15` | cand_A with c1_view_dropout_prob = 0.15 | 0.4287 | 0.3796 | 0.4308 | 0.4130 ± 0.0236 | `[+0.0027, +0.0055, -0.0011]` | +0.0024 ± 0.0027 |
+| `cand_A` | `0.25` | cand_A with c1_view_dropout_prob = 0.25 (default) | 0.4260 | 0.3742 | 0.4319 | 0.4107 ± 0.0259 | `[+0.0000, +0.0000, +0.0000]` | +0.0000 ± 0.0000 |
+
+> **Quy tắc chọn $p_{\text{cold}}$ (Split B, `val_select`)**: `cand_A_p015` ($p_{\text{cold}}=0.15$) đạt `0.4130 ± 0.0236`, `cand_A` ($p_{\text{cold}}=0.25$) đạt `0.4107 ± 0.0259` ($|\Delta| = 0.0024$, $\max\text{Std} = 0.0259$) $\rightarrow$ Chọn **`cand_A (p_cold = 0.25)`**.
+
+### 3. C4 Ordinal Conformal Prediction ($\alpha = 0.10$, Target Coverage = 90%, Validation Selection (`val_select`))
+> **Ghi chú (Split B)**: Ở Split B, `val_calib` được chia theo thuốc nên đảm bảo độ phủ (coverage) mang tính trung bình trên thuốc; các cặp tương tác trong cùng một thuốc có tương quan. Đồng thời, độ phủ của lớp `Very Rare` (`Cov_c0`) ở Split B chỉ đạt khoảng `0.39–0.53` dù độ phủ tổng thể (`Pair Coverage`) đạt `~0.90` — conformal tiêu chuẩn và thứ tự chỉ đảm bảo độ phủ trung bình (marginal coverage), không đảm bảo độ phủ có điều kiện theo từng lớp (class-conditional coverage).
+
+| Method | C4 Variant | Pair Coverage | Drug Cov (Mean ± Std) | Drug Cov < 80% | Avg Set Size | Singleton Rate | Contiguity | Cov_c0 | Cov_c1 | Cov_c2 | Cov_c3 | Cov_c4 |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `MSSF_v2_selfcorr` | `LAC` | 0.8925 ± 0.0080 | 0.8979 ± 0.1189 | 0.1692 ± 0.0507 | 2.760 ± 0.149 | 0.0582 ± 0.0018 | 0.9446 | 0.5300 | 0.7964 | 0.8491 | 0.9771 | 0.7771 |
+| `MSSF_v2_selfcorr` | `APS` | 0.8978 ± 0.0073 | 0.9004 ± 0.1086 | 0.1443 ± 0.0141 | 2.849 ± 0.161 | 0.0377 ± 0.0061 | 0.8876 | 0.5276 | 0.7966 | 0.8650 | 0.9738 | 0.7936 |
+| `MSSF_v2_selfcorr` | `Ordinal_LAC` | 0.8953 ± 0.0098 | 0.9007 ± 0.1148 | 0.1542 ± 0.0601 | 2.746 ± 0.123 | 0.0551 ± 0.0111 | 1.0000 | 0.5085 | 0.8042 | 0.8612 | 0.9773 | 0.7772 |
+| `MSSF_v2_selfcorr` | `Ordinal_APS` | 0.8952 ± 0.0081 | 0.8983 ± 0.1119 | 0.1542 ± 0.0186 | 2.733 ± 0.120 | 0.0665 ± 0.0194 | 1.0000 | 0.4673 | 0.8322 | 0.8708 | 0.9738 | 0.7559 |
+| `cand_A` | `LAC` | 0.9001 ± 0.0086 | 0.9087 ± 0.1218 | 0.1144 ± 0.0281 | 2.566 ± 0.272 | 0.0356 ± 0.0230 | 0.9775 | 0.4792 | 0.8132 | 0.8995 | 0.9707 | 0.7857 |
+| `cand_A` | `APS` | 0.9044 ± 0.0105 | 0.9106 ± 0.1060 | 0.0995 ± 0.0307 | 2.690 ± 0.284 | 0.0279 ± 0.0166 | 0.9547 | 0.5345 | 0.8200 | 0.9079 | 0.9648 | 0.8049 |
+| `cand_A` | `Ordinal_LAC` | 0.8999 ± 0.0087 | 0.9076 ± 0.1240 | 0.1294 ± 0.0392 | 2.556 ± 0.272 | 0.0351 ± 0.0237 | 1.0000 | 0.4503 | 0.8150 | 0.9017 | 0.9703 | 0.7849 |
+| `cand_A` | `Ordinal_APS` | 0.9027 ± 0.0097 | 0.9101 ± 0.1051 | 0.1095 ± 0.0254 | 2.662 ± 0.260 | 0.0316 ± 0.0181 | 1.0000 | 0.4902 | 0.8317 | 0.9049 | 0.9653 | 0.7962 |
+| `cand_A_p015` | `LAC` | 0.8959 ± 0.0103 | 0.9050 ± 0.1236 | 0.1542 ± 0.0372 | 2.524 ± 0.147 | 0.0439 ± 0.0259 | 0.9789 | 0.4763 | 0.7507 | 0.8676 | 0.9836 | 0.8119 |
+| `cand_A_p015` | `APS` | 0.9018 ± 0.0101 | 0.9079 ± 0.1127 | 0.1393 ± 0.0141 | 2.639 ± 0.154 | 0.0289 ± 0.0147 | 0.9618 | 0.5128 | 0.7663 | 0.8786 | 0.9816 | 0.8216 |
+| `cand_A_p015` | `Ordinal_LAC` | 0.8951 ± 0.0112 | 0.9034 ± 0.1236 | 0.1592 ± 0.0392 | 2.515 ± 0.152 | 0.0437 ± 0.0267 | 1.0000 | 0.4529 | 0.7571 | 0.8692 | 0.9803 | 0.8147 |
+| `cand_A_p015` | `Ordinal_APS` | 0.8985 ± 0.0052 | 0.9034 ± 0.1174 | 0.1542 ± 0.0186 | 2.606 ± 0.106 | 0.0328 ± 0.0121 | 1.0000 | 0.4748 | 0.7796 | 0.8710 | 0.9807 | 0.8114 |
+
+### 4. C5 Soft-Label Diagnostics (`K*`, Softened Pair Ratio, and Entropy of `q`)
+| Method | Fold | K_range | K* (`n_clusters`) | Silhouette | Eigengap | Softened Pair Ratio (`frac_smoothed`) | Entropy `H(q)` (all) | Entropy `H(q)` (softened) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `cand_A` | 0 | [4, 12] | 12 | 0.4673 | 0.0126 | 0.7052 (70.52%) | 0.2179 | 0.3120 |
+| `cand_A` | 1 | [4, 12] | 5 | 0.4317 | 0.0190 | 0.8327 (83.27%) | 0.2707 | 0.3263 |
+| `cand_A` | 2 | [4, 12] | 4 | 0.4803 | 0.0227 | 0.8556 (85.56%) | 0.2800 | 0.3293 |
+| `cand_A_p015` | 0 | [4, 12] | 12 | 0.4673 | 0.0126 | 0.7052 (70.52%) | 0.2179 | 0.3120 |
+| `cand_A_p015` | 1 | [4, 12] | 5 | 0.4317 | 0.0190 | 0.8327 (83.27%) | 0.2707 | 0.3263 |
+| `cand_A_p015` | 2 | [4, 12] | 4 | 0.4803 | 0.0227 | 0.8556 (85.56%) | 0.2800 | 0.3293 |

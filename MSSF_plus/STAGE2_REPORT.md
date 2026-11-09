@@ -216,9 +216,29 @@
 
 - **Nhận xét quan trọng (Mục 2)**:
   1. Về **chất lượng bù khuyết trực tiếp (Bảng 4.2A)**, với đúng **`540` thuốc train trên Split B** (trong mỗi lần cross-fit dùng **`389` thuốc `fit_sub`**, **`43` thuốc `val_sub`**, **`108` thuốc `holdout`**, đặc trưng tĩnh nối liền `6,759` chiều), **`regress_ridge` vượt qua cả `regress` (MLP) lẫn `diffusion` trên mọi chỉ số**: giảm `Avg MSE` từ `0.009274 -> 0.008656`, tăng `Avg Spearman` từ `0.6843 -> 0.7054`, và **tăng gấp 1.5 lần tỷ lệ trùng láng giềng gần nhất `Top-10 Overlap` (`22.24%` so với `14.78%` của MLP và `7.46%` của `mean`)**, trong khi thời gian chạy chỉ mất **`1.11s`** (nhanh gấp 27 lần so với MLP `30.17s` và không tốn bất kỳ mạng nơ-ron phụ trợ nào).
-  2. Về **hiệu năng downstream của `MSSF_plus` (Bảng 4.2B)**:
-     - Ở thiết lập bảng chính (`profile_self_correction = 1`), trên Fold 0 Split B, **`C3_ce_unweighted_ridge_selfcorr` đạt `Macro-F1 = 0.4322` và `QWK = 0.5440`**, cao hơn `C3_ce_unweighted_selfcorr` dùng MLP (`Macro-F1 = 0.4285`, `QWK = 0.5355`).
+  2. Về **hiệu năng downstream của `MSSF_plus` qua đủ 3 Fold 0–2 trên Split B (`profile_self_correction = 1`, Bảng 4.2C & 4.2D bên dưới)**:
+     - **`C3_ce_unweighted_ridge_selfcorr` (`regress_ridge`, $K=5$)** đạt **`Macro-F1 = 0.4143 ± 0.0206`**, **`QWK = 0.5034 ± 0.0470`**, **`MAE = 0.5814 ± 0.0256`**, thắng `regress` MLP (`C3_ce_unweighted_selfcorr`) về `Macro-F1` trên **2/3 fold (Fold 0: `0.4322` vs `0.4285`; Fold 1: `0.3855` vs `0.3810`)**, đạt **`QWK` trung bình cao hơn (`0.5034` vs `0.5007`)**, và có `Macro-F1` trung bình 3 fold (`0.4143` vs `0.4169`, chênh `-0.0026`) nằm hoàn toàn trong phạm vi `< 1` độ lệch chuẩn nhiễu seed (`0.0040`), trong khi loại bỏ hoàn toàn `2,182,876` tham số/fold của mạng MLP.
      - Quyết định thiết kế: **Chuyển bộ bù khuyết C1 mặc định sang `regress_ridge`**; giữ `regress` (MLP) làm một dòng ablation; loại bỏ hoàn toàn `diffusion` khỏi mọi lần chạy tiếp theo.
+
+#### Bảng 4.2C: Chi tiết Từng Fold (Folds 0, 1, 2) trên Split B (`val_select`, `profile_self_correction = 1`) — `regress_ridge` vs `regress` MLP
+| Mô hình | Bộ bù khuyết C1 ($K=5$) | Fold | Best Ep | `Macro-F1` | `QWK` | `MAE` | `Weighted-F1` | `Accuracy` | `Gap(eval)` | `F1_c0` | `F1_c1` | `F1_c2` | `F1_c3` | `F1_c4` |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `C3_ce_unweighted_ridge_selfcorr` | `regress_ridge` | 0 | 17 | **0.4322** | **0.5440** | 0.5453 | 0.5248 | 0.5263 | +0.2851 | 0.2745 | 0.4483 | 0.5049 | 0.6204 | 0.3131 |
+| `C3_ce_unweighted_ridge_selfcorr` | `regress_ridge` | 1 | 36 | **0.3855** | 0.4376 | **0.5973** | 0.4959 | 0.5062 | +0.4340 | 0.3288 | 0.2363 | 0.3515 | 0.6398 | 0.3710 |
+| `C3_ce_unweighted_ridge_selfcorr` | `regress_ridge` | 2 | 40 | 0.4252 | **0.5288** | 0.6015 | 0.4923 | 0.4900 | +0.3347 | 0.3036 | 0.3603 | 0.5396 | 0.5308 | 0.3917 |
+| `C3_ce_unweighted_selfcorr` | `regress` (MLP) | 0 | 40 | 0.4285 | 0.5355 | **0.5390** | 0.5274 | 0.5296 | +0.3964 | 0.2588 | 0.4563 | 0.5167 | 0.6217 | 0.2889 |
+| `C3_ce_unweighted_selfcorr` | `regress` (MLP) | 1 | 26 | 0.3810 | **0.4387** | 0.6285 | 0.4897 | 0.4863 | +0.3765 | 0.2564 | 0.2312 | 0.3974 | 0.5990 | 0.4211 |
+| `C3_ce_unweighted_selfcorr` | `regress` (MLP) | 2 | 24 | **0.4413** | 0.5277 | **0.5082** | 0.5326 | 0.5547 | +0.2689 | 0.3789 | 0.3713 | 0.5247 | 0.6645 | 0.2669 |
+| `MSSF_v2_selfcorr` | `none (zero)` | 0 | 41 | 0.3536 | 0.4141 | 0.7262 | 0.4652 | 0.4580 | +0.3507 | 0.0784 | 0.4183 | 0.4159 | 0.5705 | 0.2848 |
+| `MSSF_v2_selfcorr` | `none (zero)` | 1 | 7 | 0.3516 | 0.4034 | 0.5918 | 0.4866 | 0.5274 | +0.2540 | 0.3276 | 0.1538 | 0.3009 | 0.6754 | 0.3003 |
+| `MSSF_v2_selfcorr` | `none (zero)` | 2 | 24 | 0.3726 | 0.4156 | 0.5460 | 0.4752 | 0.5247 | +0.3076 | 0.3077 | 0.3194 | 0.3658 | 0.6684 | 0.2017 |
+
+#### Bảng 4.2D: Tổng hợp `Mean ± Std` qua 3 Fold (Folds 0–2) trên Split B (`val_select`, `profile_self_correction = 1`)
+| Mô hình | Bộ bù khuyết C1 ($K=5$) | Tham số bộ bù khuyết | `Macro-F1` (`Mean ± Std`) | `QWK` (`Mean ± Std`) | `MAE` (`Mean ± Std`) | `Weighted-F1` (`Mean ± Std`) | `Gap(eval)` (`Mean ± Std`) |
+|---|---|---:|---:|---:|---:|---:|---:|
+| **`C3_ce_unweighted_ridge_selfcorr`** | **`regress_ridge`** | **`0` (tuyến tính)** | **`0.4143 ± 0.0206`** | **`0.5034 ± 0.0470`** | `0.5814 ± 0.0256` | `0.5043 ± 0.0145` | `+0.3513 ± 0.0619` |
+| `C3_ce_unweighted_selfcorr` | `regress` (MLP) | `2,182,876 × 5` | `0.4169 ± 0.0259` | `0.5007 ± 0.0439` | **`0.5586 ± 0.0510`** | **`0.5166 ± 0.0191`** | `+0.3473 ± 0.0560` |
+| `MSSF_v2_selfcorr` | `none (zero)` | `0` | `0.3593 ± 0.0095` | `0.4110 ± 0.0054` | `0.6213 ± 0.0764` | `0.4757 ± 0.0088` | `+0.3041 ± 0.0396` |
 
 ---
 
