@@ -58,6 +58,11 @@ class MSSFSlimCriterion(nn.Module):
         batch_side: torch.Tensor,
         hard_labels: torch.Tensor,
         soft_targets: Optional[torch.Tensor] = None,
+        mu: Optional[torch.Tensor] = None,
+        logvar: Optional[torch.Tensor] = None,
+        cluster_logits: Optional[torch.Tensor] = None,
+        cluster_ids: Optional[torch.Tensor] = None,
+        epoch: int = 1,
     ) -> torch.Tensor:
         main_loss = self._ce_with_soft_targets(logits, hard_labels, soft_targets)
         total = main_loss
@@ -77,3 +82,4 @@ class MSSFSlimCriterion(nn.Module):
             total = total + self.rec_add_weight * rec_loss2
 
         return total
+
