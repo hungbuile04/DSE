@@ -137,6 +137,69 @@ SLIM_EXPERIMENTS: Dict[str, Dict[str, object]] = {
         slim_shared_emb_dim=64,
         slim_use_cnn_shared=True,
     ),
+    # Base MSSF under leak-free Protocol v2 with self-correction (BVI=True, decoders=True, 11x4 original views, hard CE)
+    'MSSF_v2_selfcorr': _make_slim_cfg(
+        'MSSF_v2_selfcorr',
+        'Leak-free MSSF_v2 with profile self-correction (11 drug + 4 SE views, BVI KL=1e-3, decoders=1e-4, no vdrop/C2/C5)',
+        use_bvi=True,
+        kl_weight=1e-3,
+        slim_use_decoder=True,
+        rec_con_weight=1e-4,
+        rec_add_weight=1e-4,
+        c1_use_availability=False,
+        c1_view_dropout_prob=0.0,
+        c1_impute='zero',
+        c2_se_mode='original',
+        c3_loss_type='ce',
+        c3_class_weighting=False,
+        c5_mode='none',
+        slim_use_add_weights=False,
+        slim_use_shared_emb=False,
+        slim_use_cnn_shared=False,
+    ),
+    # 4 Leave-One-Out (LOO) ablations anchored on the approved final model `slim_nodec`
+    'slim_nodec_loo_no_vdrop': _make_slim_cfg(
+        'slim_nodec_loo_no_vdrop',
+        'LOO on slim_nodec: drop training-time profile view dropout (p_cold=0.0); keep C2 + C5 + nodec',
+        slim_use_decoder=False,
+        rec_con_weight=0.0,
+        rec_add_weight=0.0,
+        c1_view_dropout_prob=0.0,
+        c2_se_mode='plus_ontology',
+        c5_mode='multi_view',
+        c5_alpha=0.15,
+    ),
+    'slim_nodec_loo_no_C2': _make_slim_cfg(
+        'slim_nodec_loo_no_C2',
+        'LOO on slim_nodec: drop C2 MedDRA ontology view (c2_se_mode="original", 4 SE views); keep vdrop + C5 + nodec',
+        slim_use_decoder=False,
+        rec_con_weight=0.0,
+        rec_add_weight=0.0,
+        c1_view_dropout_prob=0.25,
+        c2_se_mode='original',
+        c5_mode='multi_view',
+        c5_alpha=0.15,
+    ),
+    'slim_nodec_loo_no_C5': _make_slim_cfg(
+        'slim_nodec_loo_no_C5',
+        'LOO on slim_nodec: drop C5 multi-view spectral soft labels (c5_mode="none"); keep vdrop + C2 + nodec',
+        slim_use_decoder=False,
+        rec_con_weight=0.0,
+        rec_add_weight=0.0,
+        c1_view_dropout_prob=0.25,
+        c2_se_mode='plus_ontology',
+        c5_mode='none',
+    ),
+    'slim_nodec_loo_no_all': _make_slim_cfg(
+        'slim_nodec_loo_no_all',
+        'LOO on slim_nodec: drop all three (vdrop=0.0, C2="original", C5="none") on deterministic nodec backbone',
+        slim_use_decoder=False,
+        rec_con_weight=0.0,
+        rec_add_weight=0.0,
+        c1_view_dropout_prob=0.0,
+        c2_se_mode='original',
+        c5_mode='none',
+    ),
 }
 
 SLIM_ORDER = [
@@ -145,6 +208,30 @@ SLIM_ORDER = [
     'slim_nodec_addw',
     'slim_all',
     'slim_all_cnnshared',
+]
+
+FINAL_10FOLD_EXPERIMENTS = [
+    'slim_nodec',
+    'cand_A',
+    'slim_all_cnnshared',
+    'MSSF_v2_selfcorr',
+    'slim_nodec_loo_no_vdrop',
+    'slim_nodec_loo_no_C2',
+    'slim_nodec_loo_no_C5',
+    'slim_nodec_loo_no_all',
+]
+
+ALL_REPORT_ORDER = [
+    'slim_nodec',
+    'cand_A',
+    'slim_nodec_addw',
+    'slim_all',
+    'slim_all_cnnshared',
+    'slim_nodec_loo_no_vdrop',
+    'slim_nodec_loo_no_C2',
+    'slim_nodec_loo_no_C5',
+    'slim_nodec_loo_no_all',
+    'MSSF_v2_selfcorr',
 ]
 
 
@@ -158,3 +245,4 @@ def get_slim_config(exp_name: str, **cli_overrides) -> Dict[str, object]:
         if v is not None:
             cfg[k] = v
     return cfg
+

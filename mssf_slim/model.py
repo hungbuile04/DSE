@@ -18,6 +18,16 @@ from MSSF_plus.protocol import N_DRUGS, N_SIDES
 from MSSF_plus.views import compute_batch_self_corrected_profiles
 
 
+class GaussianParametrizer(nn.Module):
+    def __init__(self, feature_dim: int, latent_dim: int):
+        super().__init__()
+        self.h1 = nn.Linear(feature_dim, latent_dim)
+        self.h2 = nn.Linear(feature_dim, latent_dim)
+
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        return self.h1(x), self.h2(x)
+
+
 class Attention(nn.Module):
     """Exact MSSF Attention block (MSSF/model.py L27-68)."""
 
@@ -520,7 +530,7 @@ class MSSFSlimModel(nn.Module):
         self.view_dropout_prob = float(cfg.get('c1_view_dropout_prob', 0.25))
         self.profile_self_correction = bool(cfg.get('profile_self_correction', True))
         self.use_factored_crossprod = bool(cfg.get('use_factored_crossprod', True))
-        self.use_bvi = False
+        self.use_bvi = bool(cfg.get('use_bvi', False))
 
         # Slim flags
         self.slim_use_decoder = bool(cfg.get('slim_use_decoder', True))
@@ -558,7 +568,7 @@ class MSSFSlimModel(nn.Module):
             else None
         )
 
-        # Preserve exact module creation order of MSSFPlusModel for cand_A parity
+        # Preserve exact module creation order of MSSFPlusModel for cand_A and MSSF_v2_selfcorr parity
         if self.slim_use_shared_emb:
             self.sharedViewEmbed = SharedViewEmbedding(
                 n_drug_views=self.n_drug_views,
@@ -609,11 +619,23 @@ class MSSFSlimModel(nn.Module):
             use_factored=self.use_factored_crossprod,
         )
         self.attention = Attention(inputdim=128 * 3, heads=4)
-        self.det_projector = nn.Sequential(
-            nn.Linear(128 * 3, gp_dim),
-            nn.Dropout(dropout),
-        )
+        if self.use_bvi:
+            self.gaussian_parametrizer = GaussianParametrizer(feature_dim=128 * 3, latent_dim=gp_dim)
+            self.det_projector = None
+        else:
+            self.gaussian_parametrizer = None
+            self.det_projector = nn.Sequential(
+                nn.Linear(128 * 3, gp_dim),
+                nn.Dropout(dropout),
+            )
         self.classifier = Classifier(latent_dim=gp_dim, classes=out_classes, dropout=dropout)
+
+    def reparameterize(self, mu: torch.Tensor, logvar: torch.Tensor) -> torch.Tensor:
+        if self.training:
+            std = torch.exp(0.5 * logvar)
+            eps = torch.randn_like(std)
+            return eps.mul(std).add_(mu)
+        return mu
 
     def _apply_profile_self_correction(
         self,
@@ -764,9 +786,13 @@ class MSSFSlimModel(nn.Module):
         features = torch.cat((feature1, feature2, feature3), dim=1)
         features = self.attention(features)
 
-        latent_features = self.det_projector(features)
-        mu = latent_features
-        logvar = torch.zeros_like(latent_features)
+        if self.use_bvi:
+            mu, logvar = self.gaussian_parametrizer(features)
+            latent_features = self.reparameterize(mu, logvar)
+        else:
+            latent_features = self.det_projector(features)
+            mu = latent_features
+            logvar = torch.zeros_like(latent_features)
 
         logits = self.classifier(latent_features)
         return logits, rec_con, rec_add, mu, logvar, mod_drugs, mod_sides, None

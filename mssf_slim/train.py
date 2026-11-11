@@ -517,6 +517,16 @@ def _sync_method_dir(src_dir: str, drive_dir: Optional[str], method_folder: str)
             shutil.copy2(s_path, d_path)
 
 
+def _is_valid_npy_file(path: str) -> bool:
+    if not os.path.isfile(path) or os.path.getsize(path) == 0:
+        return False
+    try:
+        arr = np.load(path, allow_pickle=False)
+        return arr.size > 0
+    except Exception:
+        return False
+
+
 def _try_restore_completed_fold(
     method_dir: str,
     drive_dir: Optional[str],
@@ -525,9 +535,9 @@ def _try_restore_completed_fold(
     eval_test: bool = False,
 ) -> Optional[dict]:
     """
-    If fold outputs already exist locally in `results_slim/` or in `drive_dir`, restore them
-    locally and return the loaded fold_summary. Requires `'peak_gpu_mb'` and `'named_children_params'`
-    to be present in `fold_{fold}_summary.json` so Stage 5 diagnostics are complete.
+    If fold outputs already exist locally in `results_slim/` or in `drive_dir`, validate their
+    `.npy` and `.json` integrity (auto-cleaning 0-byte/truncated files from interrupted Colab
+    sessions) and return the loaded fold_summary.
     """
     import shutil
     base_req_files = [
@@ -555,13 +565,26 @@ def _try_restore_completed_fold(
             for fname in set(req_files + opt_files):
                 local_p = os.path.join(method_dir, fname)
                 drive_p = os.path.join(drive_method_dir, fname)
+                if fname.endswith('.npy'):
+                    if os.path.exists(drive_p) and not _is_valid_npy_file(drive_p):
+                        print(f"  [CLEANUP] Removing corrupted Drive file: {drive_p}")
+                        os.remove(drive_p)
+                    if os.path.exists(local_p) and not _is_valid_npy_file(local_p):
+                        print(f"  [CLEANUP] Removing corrupted local file: {local_p}")
+                        os.remove(local_p)
                 if not os.path.exists(local_p) and os.path.exists(drive_p):
                     shutil.copy2(drive_p, local_p)
 
     if all(os.path.exists(os.path.join(method_dir, f)) for f in req_files):
+        for fname in req_files:
+            if fname.endswith('.npy') and not _is_valid_npy_file(os.path.join(method_dir, fname)):
+                return None
         sum_file = os.path.join(method_dir, f'fold_{fold}_summary.json')
-        with open(sum_file, 'r', encoding='utf-8') as f:
-            summary_data = json.load(f)
+        try:
+            with open(sum_file, 'r', encoding='utf-8') as f:
+                summary_data = json.load(f)
+        except Exception:
+            return None
         if (
             summary_data.get('train_eval_mode', False) is True
             and 'best_train_macro_f1' in summary_data

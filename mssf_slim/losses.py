@@ -8,7 +8,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from MSSF_plus.losses import compute_class_weights_from_train, logits_to_probs
+from MSSF_plus.losses import (
+    compute_class_weights_from_train,
+    kl_divergence_loss,
+    logits_to_probs,
+)
 
 
 class MSSFSlimCriterion(nn.Module):
@@ -22,6 +26,8 @@ class MSSFSlimCriterion(nn.Module):
         super().__init__()
         self.loss_type = cfg.get('c3_loss_type', 'ce')
         self.use_class_weights = bool(cfg.get('c3_class_weighting', False))
+        self.use_bvi = bool(cfg.get('use_bvi', False))
+        self.kl_weight = float(cfg.get('kl_weight', 0.001)) if self.use_bvi else 0.0
         self.rec_con_weight = float(cfg.get('rec_con_weight', 0.0))
         self.rec_add_weight = float(cfg.get('rec_add_weight', 0.0))
         self.n_drug_views = int(n_drug_views)
@@ -67,6 +73,9 @@ class MSSFSlimCriterion(nn.Module):
         main_loss = self._ce_with_soft_targets(logits, hard_labels, soft_targets)
         total = main_loss
 
+        if self.kl_weight > 0.0 and mu is not None and logvar is not None:
+            total = total + self.kl_weight * kl_divergence_loss(mu, logvar)
+
         if self.rec_con_weight > 0.0 and rec_con is not None:
             batch_vec = torch.cat((batch_drug, batch_side), dim=1)
             rec_loss1 = F.mse_loss(rec_con, batch_vec, reduction='none').sum(dim=-1).mean()
@@ -82,4 +91,5 @@ class MSSFSlimCriterion(nn.Module):
             total = total + self.rec_add_weight * rec_loss2
 
         return total
+
 

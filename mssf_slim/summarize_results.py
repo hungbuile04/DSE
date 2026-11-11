@@ -1,19 +1,22 @@
 """
-Summarize Stage 5 (`mssf_slim`) results directly from saved `.npy` and `.json` files in
-`results_slim/`.
+Summarize Stage 5 & 10-fold (`mssf_slim`) `val_select` results directly from saved `.npy` and `.json`
+files in `results_slim/` (and optionally fold-matched external baselines from `results_v2/`).
 
-Generates the complete verbatim Markdown report required for Stage 5 review:
-  0. Step 0 Parity Check status + Parameter counts by `named_children()` for all 5 Stage 5
+Generates the complete verbatim Markdown report:
+  0. Step 0 Parity Check status + Parameter counts by `named_children()` across all registered
      configurations + verbatim `print(model)` of `slim_all`.
   1. Overall & Ordinal Classification Metrics (`Macro-F1`, `Weighted-F1`, `Accuracy`, `QWK`,
      `MAE`, `Gap (tr - val)`, `Time/Fold (s)`, `Peak GPU (MB)`).
   2. Per-Class F1 Breakdown (`F1_c0..c4`) and Per-Fold Breakdown.
-  2e. Paired Fold Comparison vs `cand_A`, flagging any configuration that drops by more than
-      1 fold standard deviation on Split B or Split A.
+  2e. Paired Fold Comparison vs `cand_A` and vs `slim_nodec` (with paired Wilcoxon signed-rank
+      p-value when common folds >= 6).
   2f. Learned `EN-add` view weights `w_v` (mean +/- std across folds) for interpretability.
   3. C4 Ordinal Conformal Prediction metrics (`val_select`).
-  4. Joint Cross-Split Selection Table (picking the most compact configuration that does not
-     drop Macro-F1 by more than 1 fold standard deviation on either Split B or Split A).
+  4. Joint Cross-Split Selection Table & Approved Final Model Rationale (`slim_nodec` final model;
+     `slim_all_cnnshared` maximum-compression ablation variant).
+  5. Optional Fold-Matched Baseline Comparison Table (`--baseline_results_dir` / `--baseline_drive_dir`),
+     enforcing identical fold sets across compared models and keeping 3-fold `HSTrans` explicitly
+     separated with footnote ("3 fold do chi phí ~7.900 giây/fold").
 """
 
 import os
@@ -22,16 +25,19 @@ import glob
 import json
 import shutil
 import argparse
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
+from scipy import stats
 
 from MSSF_plus.protocol import load_fold_data
 from MSSF_plus.metrics import compute_multiclass_metrics, aggregate_fold_metrics
 from MSSF_plus.conformal import evaluate_all_conformal_methods
 
 from mssf_slim.configs import (
+    ALL_REPORT_ORDER,
     DEFAULT_RESULTS_SLIM_DIR,
+    SLIM_EXPERIMENTS,
     SLIM_ORDER,
     get_slim_config,
 )
@@ -41,13 +47,45 @@ from mssf_slim.model import (
 )
 
 
+BASELINE_REPORT_ORDER = [
+    'SDPred_selfcorr_thr',
+    'SDPred_thr',
+    'SDPred_selfcorr',
+    'SDPred',
+    'MGPred_selfcorr_thr',
+    'MGPred_thr',
+    'MGPred_selfcorr',
+    'MGPred',
+    'MVSL-DSF_selfcorr_thr',
+    'MVSL-DSF_thr',
+    'MVSL-DSF_selfcorr',
+    'MVSL-DSF',
+    'DSGAT_thr',
+    'DSGAT',
+    'A3Net_thr',
+    'A3Net',
+    'HSTrans_thr',
+    'HSTrans',
+]
+
+
+def _is_valid_npy_file(path: str) -> bool:
+    if not os.path.isfile(path) or os.path.getsize(path) == 0:
+        return False
+    try:
+        arr = np.load(path, allow_pickle=False)
+        return arr.size > 0
+    except Exception:
+        return False
+
+
 def _sync_from_drive_if_available(
     results_dir: str,
     drive_dir: Optional[str],
     split_type: str,
     only_methods: Optional[List[str]] = None,
 ) -> None:
-    """Copy completed fold files from drive_dir/*_{split_type} into results_dir if missing locally."""
+    """Copy valid completed fold files from drive_dir/*_{split_type} into results_dir if missing locally."""
     if not drive_dir or not os.path.isdir(drive_dir):
         return
     src_s0 = os.path.join(drive_dir, 'step0_parity_check.json')
@@ -72,16 +110,39 @@ def _sync_from_drive_if_available(
         for fname in os.listdir(src_mdir):
             sp = os.path.join(src_mdir, fname)
             dp = os.path.join(dst_mdir, fname)
-            if os.path.isfile(sp) and not os.path.exists(dp):
+            if not os.path.isfile(sp):
+                continue
+            if fname.endswith('.npy') and not _is_valid_npy_file(sp):
+                print(f"[WARN] Skipping corrupted .npy file on Drive: {sp}", file=sys.stderr)
+                continue
+            if os.path.exists(dp) and fname.endswith('.npy') and not _is_valid_npy_file(dp):
+                os.remove(dp)
+            if not os.path.exists(dp):
                 shutil.copy2(sp, dp)
 
 
-def format_architecture_and_params_section(results_dir: str) -> str:
+def _instantiate_model_for_cfg_name(exp_name: str) -> MSSFSlimModel:
+    cfg = get_slim_config(exp_name)
+    se_mode = str(cfg.get('c2_se_mode', 'plus_ontology'))
+    n_se = 5 if se_mode == 'plus_ontology' else (3 if se_mode == 'no_profile' else 4)
+    prof_se = [2, 3] if n_se >= 4 else []
+    return MSSFSlimModel(
+        cfg=cfg,
+        n_drug_views=11,
+        n_se_views=n_se,
+        profile_drug_view_indices=[8, 9],
+        profile_se_view_indices=prof_se,
+    )
+
+
+def format_architecture_and_params_section(
+    results_dir: str,
+    only_methods: Optional[List[str]] = None,
+) -> str:
     """
     Build Section 0:
       - Step 0 Parity Check summary (if `step0_parity_check.json` exists)
-      - Parameter counts by `named_children()` for `cand_A`, `slim_nodec`, `slim_nodec_addw`,
-        `slim_all`, `slim_all_cnnshared`
+      - Parameter counts by `model.named_children()` across configurations
       - Verbatim `print(model)` of `slim_all`
     """
     lines = ["## 0. Step 0 Parity Verification & Parameter Breakdown (`named_children()`)\n"]
@@ -103,6 +164,19 @@ def format_architecture_and_params_section(results_dir: str) -> str:
             f"| `{ref_f1:.4f}` | `{got_f1:.4f}` | `{diff_f1:.6f}` | `$\\le {tol:.4f}$` | **`{status}`** | `{pgpu:.1f}` |\n"
         )
 
+    param_names = [m for m in ALL_REPORT_ORDER if (only_methods is None or m in only_methods or m == 'cand_A')]
+    if not param_names:
+        param_names = list(SLIM_ORDER)
+
+    breakdowns: Dict[str, Dict[str, int]] = {}
+    for exp_name in param_names:
+        if exp_name in SLIM_EXPERIMENTS:
+            m = _instantiate_model_for_cfg_name(exp_name)
+            breakdowns[exp_name] = get_named_children_param_breakdown(m)
+
+    slim_all_repr = str(_instantiate_model_for_cfg_name('slim_all'))
+
+    has_bvi_col = any(bd.get('gaussian_parametrizer', 0) > 0 for bd in breakdowns.values())
     child_cols = [
         'sharedViewEmbed',
         'encoderConnection',
@@ -111,33 +185,28 @@ def format_architecture_and_params_section(results_dir: str) -> str:
         'crossProduction',
         'attention',
         'det_projector',
-        'classifier',
     ]
+    if has_bvi_col:
+        child_cols.append('gaussian_parametrizer')
+    child_cols.append('classifier')
 
-    breakdowns: Dict[str, Dict[str, int]] = {}
-    slim_all_repr = ""
-    for exp_name in SLIM_ORDER:
-        cfg = get_slim_config(exp_name)
-        m = MSSFSlimModel(cfg=cfg, n_drug_views=11, n_se_views=5, profile_drug_view_indices=[8, 9], profile_se_view_indices=[2, 3])
-        breakdowns[exp_name] = get_named_children_param_breakdown(m)
-        if exp_name == 'slim_all':
-            slim_all_repr = str(m)
-
-    base_total = breakdowns['cand_A']['TOTAL']
+    base_total = breakdowns.get('cand_A', get_named_children_param_breakdown(_instantiate_model_for_cfg_name('cand_A')))['TOTAL']
 
     lines.append("### 0b. Parameter Counts by `model.named_children()` Across Configurations")
-    header = "| Configuration | " + " | ".join([f"`{c}`" for c in child_cols]) + " | **`TOTAL`** | **Reduction vs `cand_A`** |"
+    header = "| Configuration | " + " | ".join([f"`{c}`" for c in child_cols]) + " | **`TOTAL`** | **vs `cand_A`** |"
     align = "|---|" + "|".join(["---:" for _ in child_cols]) + "|---:|---:|"
     lines.append(header)
     lines.append(align)
 
-    for exp_name in SLIM_ORDER:
+    for exp_name in param_names:
+        if exp_name not in breakdowns:
+            continue
         bd = breakdowns[exp_name]
         tot = bd['TOTAL']
-        red_pct = (1.0 - float(tot) / float(base_total)) * 100.0
+        delta_pct = (float(tot) / float(base_total) - 1.0) * 100.0
         row_cells = [f"{bd.get(c, 0):,}" for c in child_cols]
         lines.append(
-            f"| `{exp_name}` | " + " | ".join(row_cells) + f" | **{tot:,}** | `-{red_pct:.2f}%` ({tot / base_total:.3f}x) |"
+            f"| `{exp_name}` | " + " | ".join(row_cells) + f" | **{tot:,}** | `{delta_pct:+.2f}%` ({tot / base_total:.3f}x) |"
         )
 
     lines.append("\n### 0c. Verbatim `print(model)` of `slim_all`")
@@ -153,6 +222,7 @@ def collect_method_results(
     only_folds: Optional[List[int]] = None,
     only_methods: Optional[List[str]] = None,
     drive_dir: Optional[str] = None,
+    compute_conformal: bool = True,
 ) -> Dict[str, dict]:
     """Scan `results_dir/*_{split_type}` and evaluate all available folds directly from saved `.npy` files."""
     _sync_from_drive_if_available(results_dir, drive_dir, split_type, only_methods=only_methods)
@@ -192,11 +262,18 @@ def collect_method_results(
             vsel_prb_path = os.path.join(mdir, f'fold_{k}_valsel_probs.npy')
             sum_path = os.path.join(mdir, f'fold_{k}_summary.json')
 
-            has_valsel_npy = os.path.exists(vsel_lbl_path) and os.path.exists(vsel_prb_path)
-            if not (has_valsel_npy or os.path.exists(sum_path)):
+            has_valsel_npy = _is_valid_npy_file(vsel_lbl_path) and _is_valid_npy_file(vsel_prb_path)
+            has_sum_json = os.path.isfile(sum_path) and os.path.getsize(sum_path) > 0
+            if not (has_valsel_npy or has_sum_json):
                 continue
 
-            folds_found.append(k)
+            s_json = None
+            if has_sum_json:
+                try:
+                    with open(sum_path, 'r', encoding='utf-8') as sf:
+                        s_json = json.load(sf)
+                except Exception:
+                    s_json = None
 
             vs_metrics_k = None
             if has_valsel_npy:
@@ -205,23 +282,25 @@ def collect_method_results(
                 vs_prb = np.load(vsel_prb_path)
                 vs_prd = np.argmax(vs_prb, axis=1)
                 vs_metrics_k = compute_multiclass_metrics(vs_c, vs_prd, probs=vs_prb)
-                fold_valsel_list.append(vs_metrics_k)
+            elif s_json is not None and s_json.get('valsel_metrics') is not None:
+                vs_metrics_k = s_json['valsel_metrics']
 
-            if os.path.exists(sum_path):
-                with open(sum_path, 'r', encoding='utf-8') as sf:
-                    s_json = json.load(sf)
-                if vs_metrics_k is None and s_json.get('valsel_metrics') is not None:
-                    vs_metrics_k = s_json['valsel_metrics']
-                    fold_valsel_list.append(vs_metrics_k)
-                if s_json.get('best_train_macro_f1') is not None and vs_metrics_k is not None:
+            if vs_metrics_k is None:
+                continue
+
+            folds_found.append(k)
+            fold_valsel_list.append(vs_metrics_k)
+
+            if s_json is not None:
+                if s_json.get('best_train_macro_f1') is not None:
                     fold_gaps.append(float(s_json['best_train_macro_f1']) - float(vs_metrics_k['MacroF1']))
                 elif s_json.get('train_valsel_macro_f1_gap') is not None:
                     fold_gaps.append(float(s_json['train_valsel_macro_f1_gap']))
-                if 'elapsed_seconds' in s_json:
+                if 'elapsed_seconds' in s_json and s_json['elapsed_seconds'] is not None:
                     fold_times.append(float(s_json['elapsed_seconds']))
                 if 'peak_gpu_mb' in s_json and s_json['peak_gpu_mb'] is not None:
                     fold_peak_gpus.append(float(s_json['peak_gpu_mb']))
-                if total_params is None and 'total_params' in s_json:
+                if total_params is None and 'total_params' in s_json and s_json['total_params'] is not None:
                     total_params = int(s_json['total_params'])
                 if named_children_params is None and 'named_children_params' in s_json:
                     named_children_params = s_json['named_children_params']
@@ -234,7 +313,12 @@ def collect_method_results(
                     c5d['fold'] = k
                     fold_c5_list.append(c5d)
 
-            if os.path.exists(vcal_lbl_path) and os.path.exists(vcal_prb_path) and has_valsel_npy:
+            if (
+                compute_conformal
+                and has_valsel_npy
+                and _is_valid_npy_file(vcal_lbl_path)
+                and _is_valid_npy_file(vcal_prb_path)
+            ):
                 vcal_c = np.load(vcal_lbl_path).flatten()
                 vcal_prb = np.load(vcal_prb_path)
                 vcal_freq = (vcal_c + 1) if vcal_c.min() == 0 else vcal_c
@@ -266,9 +350,8 @@ def collect_method_results(
                 cm, cs = aggregate_fold_metrics(c4_list)
                 agg_valsel_c4[c4_name] = {'mean': cm, 'std': cs}
 
-        if total_params is None and method_name in SLIM_ORDER:
-            cfg = get_slim_config(method_name)
-            m = MSSFSlimModel(cfg=cfg, n_drug_views=11, n_se_views=5)
+        if total_params is None and method_name in SLIM_EXPERIMENTS:
+            m = _instantiate_model_for_cfg_name(method_name)
             bd = get_named_children_param_breakdown(m)
             total_params = bd['TOTAL']
             named_children_params = bd
@@ -296,9 +379,20 @@ def collect_method_results(
 
 
 def _ordered_method_names(collected: Dict[str, dict]) -> List[str]:
-    ordered = [m for m in SLIM_ORDER if m in collected]
-    extras = sorted([m for m in collected.keys() if m not in SLIM_ORDER])
+    ordered = [m for m in ALL_REPORT_ORDER if m in collected]
+    extras = sorted([m for m in collected.keys() if m not in ALL_REPORT_ORDER])
     return ordered + extras
+
+
+def _paired_wilcoxon_p(diffs: List[float]) -> Optional[float]:
+    arr = np.asarray(diffs, dtype=np.float64)
+    if len(arr) < 6 or np.allclose(arr, 0.0):
+        return None
+    try:
+        _, p_val = stats.wilcoxon(arr)
+        return float(p_val)
+    except Exception:
+        return None
 
 
 def format_markdown_tables(
@@ -333,8 +427,9 @@ def format_markdown_tables(
         p_m, p_max = data['peak_gpu_mean'], data['peak_gpu_max']
         p_str = f"{p_m:.1f} (max {p_max:.1f})" if not np.isnan(p_m) and p_m > 0 else "N/A"
         t_params = data.get('total_params', 0)
+        p_cnt_str = f"{t_params:,}" if t_params > 0 else "N/A"
         lines.append(
-            f"| `{m_name}` | {len(folds)} | {t_params:,} | "
+            f"| `{m_name}` | {len(folds)} | {p_cnt_str} | "
             f"{mean['MacroF1']:.4f} ± {std['MacroF1']:.4f} | "
             f"{mean['WeightedF1']:.4f} ± {std['WeightedF1']:.4f} | "
             f"{mean['Accuracy']:.4f} ± {std['Accuracy']:.4f} | "
@@ -345,8 +440,8 @@ def format_markdown_tables(
 
     # 2. Per-class F1 table
     lines.append(f"\n### 2. Per-Class F1 Breakdown (`c0..c4`, {target_label})")
-    lines.append("| Method | F1_c0 (Very Rare) | F1_c1 (Rare) | F1_c2 (Infrequent) | F1_c3 (Frequent) | F1_c4 (Very Freq) |")
-    lines.append("|---|---:|---:|---:|---:|---:|")
+    lines.append("| Method | F1 | F1_c0 (Very Rare) | F1_c1 (Rare) | F1_c2 (Infrequent) | F1_c3 (Frequent) | F1_c4 (Very Freq) |")
+    lines.append("|---|---:|---:|---:|---:|---:|---:|")
     for m_name in method_names:
         data = collected[m_name]
         src = data['valsel']
@@ -355,7 +450,7 @@ def format_markdown_tables(
         mean = src['mean']
         std = src['std']
         lines.append(
-            f"| `{m_name}` | "
+            f"| `{m_name}` | {mean['MacroF1']:.4f} | "
             f"{mean['F1_c0']:.4f} ± {std['F1_c0']:.4f} | "
             f"{mean['F1_c1']:.4f} ± {std['F1_c1']:.4f} | "
             f"{mean['F1_c2']:.4f} ± {std['F1_c2']:.4f} | "
@@ -389,38 +484,70 @@ def format_markdown_tables(
                 f"{fm['F1_c3']:.4f} | {fm['F1_c4']:.4f} | {gap_v} | {tim_v} | {gpu_v} |"
             )
 
-    # 2e. Paired fold comparison vs cand_A
+    # 2e-1. Paired fold comparison vs slim_nodec (final model)
+    if 'slim_nodec' in collected and len(method_names) >= 2:
+        ref_map = {
+            int(f_i): float(fm['MacroF1'])
+            for f_i, fm in zip(collected['slim_nodec']['folds'], collected['slim_nodec']['valsel']['per_fold'])
+        }
+        lines.append(
+            f"\n### 2d. Paired Fold Comparison vs Final Model `slim_nodec` (Split {split_type}, {target_label})"
+        )
+        lines.append(
+            "| Configuration | Common Folds | Total Params | Config Macro-F1 | `slim_nodec` (Matched Folds) | Paired $\\Delta$ (`Cfg - slim_nodec`) | Wilcoxon $p$ |"
+        )
+        lines.append("|---|---:|---:|---:|---:|---:|---:|")
+        for m_name in method_names:
+            m_data = collected[m_name]
+            f_map = {
+                int(f_i): float(fm['MacroF1'])
+                for f_i, fm in zip(m_data['folds'], m_data['valsel']['per_fold'])
+            }
+            common = sorted(set(f_map.keys()) & set(ref_map.keys()))
+            if not common:
+                continue
+            c_vals = [f_map[f] for f in common]
+            r_vals = [ref_map[f] for f in common]
+            diffs = [f_map[f] - ref_map[f] for f in common]
+            p_w = _paired_wilcoxon_p(diffs)
+            p_str = f"`{p_w:.4f}`" if p_w is not None else ("`1.0000`" if m_name == 'slim_nodec' else "N/A (<6 folds)")
+            lines.append(
+                f"| `{m_name}` | {len(common)} (`{common[0]}..{common[-1]}`) | {m_data['total_params']:,} | "
+                f"{np.mean(c_vals):.4f} ± {np.std(c_vals):.4f} | "
+                f"{np.mean(r_vals):.4f} ± {np.std(r_vals):.4f} | "
+                f"{np.mean(diffs):+.4f} ± {np.std(diffs):.4f} | {p_str} |"
+            )
+
+    # 2e-2. Paired fold comparison vs cand_A (control with decoders)
     if 'cand_A' in collected and len(method_names) >= 2:
+        ref_map_ca = {
+            int(f_i): float(fm['MacroF1'])
+            for f_i, fm in zip(collected['cand_A']['folds'], collected['cand_A']['valsel']['per_fold'])
+        }
         lines.append(
             f"\n### 2e. Paired Fold Comparison vs `cand_A` & 1-Fold-Std Drop Check (Split {split_type}, {target_label})"
         )
-        fold_maps: Dict[str, Dict[int, float]] = {}
-        means: Dict[str, float] = {}
-        stds: Dict[str, float] = {}
+        lines.append(
+            "| Configuration | Common Folds | Total Params | Config Macro-F1 | Paired $\\Delta$ vs `cand_A` (Mean ± Std) | Wilcoxon $p$ | Drop $> 1\\,\\text{Std}_{\\text{cand\\_A}}$? |"
+        )
+        lines.append("|---|---:|---:|---:|---:|---:|---|")
         for m_name in method_names:
             m_data = collected[m_name]
-            src = m_data['valsel']
-            if src is not None and 'per_fold' in src:
-                fold_maps[m_name] = {int(f_i): float(fm['MacroF1']) for f_i, fm in zip(m_data['folds'], src['per_fold'])}
-                means[m_name] = float(src['mean']['MacroF1'])
-                stds[m_name] = float(src['std']['MacroF1'])
-
-        common_folds = sorted(set.intersection(*(set(m.keys()) for m in fold_maps.values())))
-        ref_std = stds['cand_A']
-        fold_cols = " | ".join([f"Fold {f}" for f in common_folds])
-        fold_align = "|".join(["---:" for _ in common_folds])
-        lines.append(
-            f"| Configuration | Total Params | {fold_cols} | Mean ± Std | Paired $\\Delta$ vs `cand_A` (Per-Fold) | Paired $\\Delta$ vs `cand_A` (Mean ± Std) | Drop $> 1\\,\\text{{Std}}_{{\\text{{cand\\_A}}}}$ (`{ref_std:.4f}`)? |"
-        )
-        lines.append(f"|---|---:|{fold_align}|---:|---|---:|---|")
-        for m_name in method_names:
-            f_map = fold_maps[m_name]
-            f_vals_str = " | ".join([f"{f_map[f]:.4f}" for f in common_folds])
-            diffs = [f_map[f] - fold_maps['cand_A'][f] for f in common_folds]
-            diffs_str = ", ".join([f"{d:+.4f}" for d in diffs])
+            f_map = {
+                int(f_i): float(fm['MacroF1'])
+                for f_i, fm in zip(m_data['folds'], m_data['valsel']['per_fold'])
+            }
+            common = sorted(set(f_map.keys()) & set(ref_map_ca.keys()))
+            if not common:
+                continue
+            c_vals = [f_map[f] for f in common]
+            r_vals = [ref_map_ca[f] for f in common]
+            ref_std = float(np.std(r_vals))
+            diffs = [f_map[f] - ref_map_ca[f] for f in common]
             d_mean = float(np.mean(diffs))
             d_std = float(np.std(diffs))
-            # Check if configuration drops by more than 1 fold standard deviation of cand_A (or min(cand_A_std, cfg_std))
+            p_w = _paired_wilcoxon_p(diffs)
+            p_str = f"`{p_w:.4f}`" if p_w is not None else ("`1.0000`" if m_name == 'cand_A' else "N/A (<6 folds)")
             drops_1std = d_mean < -ref_std
             flag_str = (
                 f"**CẢNH BÁO: TỤT > 1 Std** ($\\Delta={d_mean:+.4f} < -{ref_std:.4f}$)"
@@ -428,9 +555,9 @@ def format_markdown_tables(
                 else f"KHÔNG ($\\Delta={d_mean:+.4f} \\ge -{ref_std:.4f}$)"
             )
             lines.append(
-                f"| `{m_name}` | {collected[m_name]['total_params']:,} | {f_vals_str} | "
-                f"{means[m_name]:.4f} ± {stds[m_name]:.4f} | `[{diffs_str}]` | "
-                f"{d_mean:+.4f} ± {d_std:.4f} | {flag_str} |"
+                f"| `{m_name}` | {len(common)} | {m_data['total_params']:,} | "
+                f"{np.mean(c_vals):.4f} ± {np.std(c_vals):.4f} | "
+                f"{d_mean:+.4f} ± {d_std:.4f} | {p_str} | {flag_str} |"
             )
 
     # 2f. Learned EN-add View Weights w_v (mean across folds)
@@ -463,7 +590,7 @@ def format_markdown_tables(
                 else None
             )
 
-            lines.append(f"\n#### `{m_name}` (Split {split_type}) — Drug Views (`D1..D11`, Uniform = `1/11 = 0.0909`, Cold-Start Uniform = `1/9 = 0.1111`)")
+            lines.append(f"\n#### `{m_name}` (Split {split_type}, {len(aw_list)} folds) — Drug Views (`D1..D11`, Uniform = `1/11 = 0.0909`, Cold-Start Uniform = `1/9 = 0.1111`)")
             lines.append(
                 "| Drug View | Learned Logit (Mean ± Std) | Full-View $w_v^{\\text{full}}$ (Mean ± Std) | Cold-Start $w_v^{\\text{cold}}$ (`D9,D10=0`) | Empirical `val_select` $\\bar{w}_v$ |"
             )
@@ -481,7 +608,7 @@ def format_markdown_tables(
                     f"| `{v_name}` | {lg_m:+.4f} ± {lg_s:.4f} | {wf_m:.4f} ± {wf_s:.4f} | {wc_m:.4f} ± {wc_s:.4f} | {we_str} |"
                 )
 
-            lines.append(f"\n#### `{m_name}` (Split {split_type}) — Side-Effect Views (`S1..S5`, Uniform = `1/5 = 0.2000`)")
+            lines.append(f"\n#### `{m_name}` (Split {split_type}, {len(aw_list)} folds) — Side-Effect Views (`S1..S{len(s_names)}`)")
             lines.append(
                 "| SE View | Learned Logit (Mean ± Std) | Full-View $w_u^{\\text{full}}$ (Mean ± Std) | Empirical `val_select` $\\bar{w}_u$ |"
             )
@@ -503,11 +630,12 @@ def format_markdown_tables(
     if has_any_c4:
         lines.append(f"\n### 3. C4 Ordinal Conformal Prediction ($\\alpha = 0.10$, Target Coverage = 90%, {target_label})")
         lines.append(
-            "| Method | C4 Variant | Pair Coverage | Drug Cov (Mean ± Std) | Drug Cov < 80% | Avg Set Size | Singleton Rate | Contiguity | Cov_c0 | Cov_c1 | Cov_c2 | Cov_c3 | Cov_c4 |"
+            "| Method | Folds | C4 Variant | Pair Coverage | Drug Cov (Mean ± Std) | Drug Cov < 80% | Avg Set Size | Singleton Rate | Contiguity | Cov_c0 | Cov_c1 | Cov_c2 | Cov_c3 | Cov_c4 |"
         )
-        lines.append("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
+        lines.append("|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
         for m_name in method_names:
             c4_dict = collected[m_name].get('valsel_conformal', {})
+            n_f = len(collected[m_name]['folds'])
             for c4_name in ['LAC', 'APS', 'Ordinal_LAC', 'Ordinal_APS']:
                 if c4_name not in c4_dict:
                     continue
@@ -519,7 +647,7 @@ def format_markdown_tables(
                 dc_cell = f"{dc_m:.4f} ± {dc_s:.4f}" if not np.isnan(dc_m) else "N/A"
                 lt80_cell = f"{dc_lt80:.4f} ± {cs.get('drug_coverage_lt80_rate', 0.0):.4f}" if not np.isnan(dc_lt80) else "N/A"
                 lines.append(
-                    f"| `{m_name}` | `{c4_name}` | "
+                    f"| `{m_name}` | {n_f} | `{c4_name}` | "
                     f"{cm['empirical_coverage']:.4f} ± {cs['empirical_coverage']:.4f} | "
                     f"{dc_cell} | {lt80_cell} | "
                     f"{cm['avg_set_size']:.3f} ± {cs['avg_set_size']:.3f} | "
@@ -538,8 +666,8 @@ def format_joint_selection_section(
     collected_by_split: Dict[str, Dict[str, dict]],
 ) -> str:
     """
-    Build the joint Split B & Split A selection table applying the rule:
-      "Chọn cấu hình gọn nhất không tụt quá 1 độ lệch chuẩn giữa fold trên cả hai split."
+    Build the joint Split B & Split A comparison table across identical common folds, together with
+    the approved Stage 5 selection decision (`slim_nodec` final model; `slim_all_cnnshared` max-compression variant).
     """
     if 'B' not in collected_by_split or 'A' not in collected_by_split:
         return ""
@@ -549,77 +677,193 @@ def format_joint_selection_section(
         return ""
 
     lines = [
-        "## Joint Stage 5 Selection Summary (Split B & Split A, `val_select`)\n",
-        "| Configuration | Total Params | Reduction vs `cand_A` | Split B Macro-F1 | Split B Paired $\\Delta$ vs `cand_A` | Drop $> 1\\,\\text{Std}_B$? | Split A Macro-F1 | Split A Paired $\\Delta$ vs `cand_A` | Drop $> 1\\,\\text{Std}_A$? | Pass Both Splits? |",
-        "|---|---:|---:|---:|---:|---|---:|---:|---|---|",
+        "## Joint Cross-Split Summary (Split B & Split A, Fold-Matched `val_select`)\n",
+        "| Configuration | Common Folds (B / A) | Total Params | vs `cand_A` | Split B Macro-F1 | Split B Paired $\\Delta$ vs `cand_A` | Split A Macro-F1 | Split A Paired $\\Delta$ vs `cand_A` | Role / Status |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---|",
     ]
 
-    ref_b_mean = float(col_b['cand_A']['valsel']['mean']['MacroF1'])
-    ref_b_std = float(col_b['cand_A']['valsel']['std']['MacroF1'])
     ref_b_fmap = {int(f): float(m['MacroF1']) for f, m in zip(col_b['cand_A']['folds'], col_b['cand_A']['valsel']['per_fold'])}
-
-    ref_a_mean = float(col_a['cand_A']['valsel']['mean']['MacroF1'])
-    ref_a_std = float(col_a['cand_A']['valsel']['std']['MacroF1'])
     ref_a_fmap = {int(f): float(m['MacroF1']) for f, m in zip(col_a['cand_A']['folds'], col_a['cand_A']['valsel']['per_fold'])}
-
     base_params = int(col_b['cand_A']['total_params'])
 
-    eligible_candidates = []
-    for m_name in SLIM_ORDER:
+    role_labels = {
+        'slim_nodec': '**FINAL MODEL** (`-36.51%`, no decoders)',
+        'cand_A': 'Control (`+decoders`, isolates nodec effect)',
+        'slim_nodec_addw': 'Stage 5 ablation (`+add_weights`, 3 folds)',
+        'slim_all': 'Stage 5 ablation (`+shared_emb EN-con`, 3 folds)',
+        'slim_all_cnnshared': '**Max-Compression Variant** (`-79.12%`)',
+        'slim_nodec_loo_no_vdrop': 'LOO on `slim_nodec`: drop `vdrop`',
+        'slim_nodec_loo_no_C2': 'LOO on `slim_nodec`: drop `C2`',
+        'slim_nodec_loo_no_C5': 'LOO on `slim_nodec`: drop `C5`',
+        'slim_nodec_loo_no_all': 'LOO on `slim_nodec`: drop `vdrop+C2+C5`',
+        'MSSF_v2_selfcorr': 'Base MSSF (`Protocol v2 + selfcorr`)',
+    }
+
+    for m_name in ALL_REPORT_ORDER:
         if m_name not in col_b or m_name not in col_a:
             continue
         tot_p = int(col_b[m_name]['total_params'])
-        red_pct = (1.0 - float(tot_p) / float(base_params)) * 100.0
+        delta_pct = (float(tot_p) / float(base_params) - 1.0) * 100.0
 
-        b_mean = float(col_b[m_name]['valsel']['mean']['MacroF1'])
-        b_std = float(col_b[m_name]['valsel']['std']['MacroF1'])
         b_fmap = {int(f): float(m['MacroF1']) for f, m in zip(col_b[m_name]['folds'], col_b[m_name]['valsel']['per_fold'])}
         b_common = sorted(set(b_fmap.keys()) & set(ref_b_fmap.keys()))
+        b_vals = [b_fmap[f] for f in b_common]
         b_diffs = [b_fmap[f] - ref_b_fmap[f] for f in b_common]
-        b_d_mean = float(np.mean(b_diffs))
-        b_d_std = float(np.std(b_diffs))
-        drop_b = b_d_mean < -ref_b_std
 
-        a_mean = float(col_a[m_name]['valsel']['mean']['MacroF1'])
-        a_std = float(col_a[m_name]['valsel']['std']['MacroF1'])
         a_fmap = {int(f): float(m['MacroF1']) for f, m in zip(col_a[m_name]['folds'], col_a[m_name]['valsel']['per_fold'])}
         a_common = sorted(set(a_fmap.keys()) & set(ref_a_fmap.keys()))
+        a_vals = [a_fmap[f] for f in a_common]
         a_diffs = [a_fmap[f] - ref_a_fmap[f] for f in a_common]
-        a_d_mean = float(np.mean(a_diffs))
-        a_d_std = float(np.std(a_diffs))
-        drop_a = a_d_mean < -ref_a_std
 
-        pass_both = (not drop_b) and (not drop_a)
-        if pass_both:
-            eligible_candidates.append((tot_p, m_name, b_mean, b_std, a_mean, a_std, red_pct))
+        if not b_common or not a_common:
+            continue
 
         lines.append(
-            f"| `{m_name}` | {tot_p:,} | `-{red_pct:.2f}%` | "
-            f"{b_mean:.4f} ± {b_std:.4f} | {b_d_mean:+.4f} ± {b_d_std:.4f} | {'**YES (DROP)**' if drop_b else 'NO'} | "
-            f"{a_mean:.4f} ± {a_std:.4f} | {a_d_mean:+.4f} ± {a_d_std:.4f} | {'**YES (DROP)**' if drop_a else 'NO'} | "
-            f"{'**PASS**' if pass_both else 'FAIL'} |"
+            f"| `{m_name}` | `{len(b_common)} / {len(a_common)}` | {tot_p:,} | `{delta_pct:+.2f}%` | "
+            f"{np.mean(b_vals):.4f} ± {np.std(b_vals):.4f} | {np.mean(b_diffs):+.4f} ± {np.std(b_diffs):.4f} | "
+            f"{np.mean(a_vals):.4f} ± {np.std(a_vals):.4f} | {np.mean(a_diffs):+.4f} ± {np.std(a_diffs):.4f} | "
+            f"{role_labels.get(m_name, 'Ablation')} |"
         )
 
-    if eligible_candidates:
-        eligible_candidates.sort(key=lambda x: x[0])
-        sel_p, sel_name, sel_bm, sel_bs, sel_am, sel_as, sel_red = eligible_candidates[0]
+    lines.append(
+        "\n> **Quyết định chọn mô hình cuối Giai đoạn 5 (Đã duyệt)**:\n"
+        "> - **Mô hình cuối (`Final Model`)**: **`slim_nodec`** (**`6,803,109`** tham số, **`-36.51%`** so với `cand_A`). "
+        "Quy tắc tiền định chọn cấu hình gọn không tụt quá $1\\,\\text{Std}$ giữa các fold; `slim_nodec` vừa gọn hơn `cand_A` "
+        "vừa **không tụt mà còn tăng** ở cả hai split trên Stage 5 (`0.4223` vs `0.4123` ở Split B; `0.6475` vs `0.6435` ở Split A), "
+        "nên trội hơn `slim_all_cnnshared` theo cả tiêu chí độ chính xác lẫn tính đơn giản kiến trúc.\n"
+        "> - **Biến thể nén tối đa (`Max-Compression Ablation`)**: **`slim_all_cnnshared`** (**`2,237,621`** tham số, **`-79.12%`** so với `cand_A`) "
+        "được giữ trong bảng ablation để minh họa giới hạn nén tham số cực đại.\n"
+        "> - **Ghi chú diễn giải `slim_all` vs `slim_all_cnnshared`**: Chênh lệch `0.0155` Macro-F1 trên 3 fold ở Split B (`0.3832` vs `0.3987`) "
+        "nằm trong biên nhiễu giữa các fold (3 fold), nên được mô tả là *biến thiên không đơn điệu theo số tham số, nhiều khả năng do nhiễu mẫu nhỏ*, không diễn giải là hiệu ứng hồi phục mạnh.\n"
+    )
+    return "\n".join(lines)
+
+
+def format_fold_matched_baseline_section(
+    slim_by_split: Dict[str, Dict[str, dict]],
+    base_by_split: Dict[str, Dict[str, dict]],
+    target_folds: List[int],
+) -> str:
+    """
+    Build a strictly fold-matched comparison table on `target_folds` (e.g., `[0, 1, 2]` or `[0..9]`),
+    ensuring every row in the main table is evaluated on the exact same `target_folds`.
+    `HSTrans` / `HSTrans_thr` (3 folds `0..2`) is reported in the main table ONLY when `target_folds == [0, 1, 2]`,
+    and is separated into a dedicated 3-fold footnote block whenever `len(target_folds) > 3`.
+    """
+    fold_tag = f"Folds `{target_folds[0]}–{target_folds[-1]}` ($K={len(target_folds)}$)"
+    lines = [f"## Fold-Matched Comparison vs External Baselines ({fold_tag}, `val_select`)\n"]
+    target_set = set(target_folds)
+
+    for split_type in ['B', 'A']:
+        if split_type not in slim_by_split and split_type not in base_by_split:
+            continue
+        col_s = slim_by_split.get(split_type, {})
+        col_b = base_by_split.get(split_type, {})
+
+        lines.append(f"### Split {split_type} — Fold-Matched Table ({fold_tag}, `val_select`)")
         lines.append(
-            f"\n> **Kết luận chọn cấu hình Giai đoạn 5 (Slim)**: Theo quy tắc *chọn cấu hình gọn nhất không tụt quá 1 độ lệch chuẩn giữa fold trên cả hai split* "
-            f"($\\text{{Std}}_B(\\text{{cand\\_A}}) = {ref_b_std:.4f}$, $\\text{{Std}}_A(\\text{{cand\\_A}}) = {ref_a_std:.4f}$), "
-            f"cấu hình được chọn là **`{sel_name}`** (**`{sel_p:,}`** tham số, giảm **`{sel_red:.2f}%`** so với `cand_A`; "
-            f"Split B Macro-F1 = `{sel_bm:.4f} ± {sel_bs:.4f}`, Split A Macro-F1 = `{sel_am:.4f} ± {sel_as:.4f}`)."
+            "| Group | Method | Exact Folds | Macro-F1 | Weighted-F1 | Accuracy | QWK | MAE | Gap (tr - val) | Time/Fold (s) | Paired $\\Delta$ vs `slim_nodec` | Wilcoxon $p$ |"
         )
-    lines.append("")
+        lines.append("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
+
+        ref_fmap: Dict[int, float] = {}
+        if 'slim_nodec' in col_s:
+            s_nd = col_s['slim_nodec']
+            f_all = {int(f): float(m['MacroF1']) for f, m in zip(s_nd['folds'], s_nd['valsel']['per_fold'])}
+            if target_set.issubset(set(f_all.keys())):
+                ref_fmap = {f: f_all[f] for f in target_folds}
+
+        def _emit_row(group_lbl: str, m_name: str, m_entry: dict) -> Optional[str]:
+            f_idx_map = {int(f): idx for idx, f in enumerate(m_entry['folds'])}
+            if not target_set.issubset(set(f_idx_map.keys())):
+                return None
+            sel_metrics = [m_entry['valsel']['per_fold'][f_idx_map[f]] for f in target_folds]
+            mm, ms = aggregate_fold_metrics(sel_metrics)
+
+            f_gaps = m_entry.get('fold_gaps', [])
+            if len(f_gaps) == len(m_entry['folds']):
+                sel_gaps = [f_gaps[f_idx_map[f]] for f in target_folds]
+                g_str = f"{np.mean(sel_gaps):+.4f} ± {np.std(sel_gaps):.4f}"
+            else:
+                g_str = "N/A"
+
+            f_times = m_entry.get('fold_times', [])
+            if len(f_times) == len(m_entry['folds']):
+                sel_times = [f_times[f_idx_map[f]] for f in target_folds]
+                t_str = f"{np.mean(sel_times):.1f} ± {np.std(sel_times):.1f}"
+            else:
+                t_str = "N/A"
+
+            if ref_fmap:
+                diffs = [float(sel_metrics[i]['MacroF1']) - ref_fmap[f] for i, f in enumerate(target_folds)]
+                d_str = f"{np.mean(diffs):+.4f} ± {np.std(diffs):.4f}"
+                pw = _paired_wilcoxon_p(diffs)
+                p_str = f"`{pw:.4f}`" if pw is not None else ("`1.0000`" if m_name == 'slim_nodec' else "N/A (<6 folds)")
+            else:
+                d_str = "N/A"
+                p_str = "N/A"
+
+            return (
+                f"| {group_lbl} | `{m_name}` | `{target_folds[0]}..{target_folds[-1]}` ({len(target_folds)}) | "
+                f"{mm['MacroF1']:.4f} ± {ms['MacroF1']:.4f} | "
+                f"{mm['WeightedF1']:.4f} ± {ms['WeightedF1']:.4f} | "
+                f"{mm['Accuracy']:.4f} ± {ms['Accuracy']:.4f} | "
+                f"{mm['QWK']:.4f} ± {ms['QWK']:.4f} | "
+                f"{mm['MAE']:.4f} ± {ms['MAE']:.4f} | "
+                f"{g_str} | {t_str} | {d_str} | {p_str} |"
+            )
+
+        for m_name in ALL_REPORT_ORDER:
+            if m_name in col_s:
+                row = _emit_row("Proposed / Ablation", m_name, col_s[m_name])
+                if row:
+                    lines.append(row)
+
+        ordered_bases = [b for b in BASELINE_REPORT_ORDER if b in col_b] + sorted(
+            [b for b in col_b.keys() if b not in BASELINE_REPORT_ORDER and b not in col_s]
+        )
+        hstrans_partial_notes: List[Tuple[str, dict]] = []
+        for b_name in ordered_bases:
+            if b_name.startswith('HSTrans') and len(target_folds) > 3:
+                hstrans_partial_notes.append((b_name, col_b[b_name]))
+                continue
+            row = _emit_row("External Baseline", b_name, col_b[b_name])
+            if row:
+                lines.append(row)
+            elif b_name.startswith('HSTrans'):
+                hstrans_partial_notes.append((b_name, col_b[b_name]))
+
+        if hstrans_partial_notes:
+            lines.append(
+                "\n> **Chú thích riêng cho `HSTrans` (3 fold `0–2` do chi phí `~7.900 giây/fold` — KHÔNG gộp chung vào cột 10 fold)**:"
+            )
+            for h_name, h_entry in hstrans_partial_notes:
+                hm = h_entry['valsel']['mean']
+                hs = h_entry['valsel']['std']
+                hg = h_entry['gap_mean']
+                ht = h_entry['time_mean']
+                lines.append(
+                    f"> - `{h_name}` (Folds `{h_entry['folds']}`, $K={len(h_entry['folds'])}$): "
+                    f"Macro-F1 = `{hm['MacroF1']:.4f} ± {hs['MacroF1']:.4f}`, "
+                    f"QWK = `{hm['QWK']:.4f} ± {hs['QWK']:.4f}`, "
+                    f"**MAE = `{hm['MAE']:.4f} ± {hs['MAE']:.4f}`**, "
+                    f"**Gap(eval) = `{hg:+.4f}`**, Time = `{ht:.1f}s/fold`."
+                )
+        lines.append("")
+
     return "\n".join(lines)
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Summarize Stage 5 (mssf_slim) results directly from saved .npy files.')
+    parser = argparse.ArgumentParser(description='Summarize Stage 5 & 10-fold (mssf_slim) results directly from saved .npy files.')
     parser.add_argument('--results_dir', type=str, default=DEFAULT_RESULTS_SLIM_DIR)
     parser.add_argument('--drive_dir', type=str, default=None)
+    parser.add_argument('--baseline_results_dir', type=str, default=None)
+    parser.add_argument('--baseline_drive_dir', type=str, default=None)
     parser.add_argument('--splits', type=str, nargs='+', default=['B', 'A'], choices=['A', 'B'])
     parser.add_argument('--folds', type=int, nargs='*', default=None)
     parser.add_argument('--methods', type=str, nargs='*', default=None)
+    parser.add_argument('--no_conformal', action='store_true')
     parser.add_argument('--out_md', type=str, default=None)
     parser.add_argument('--out_raw', type=str, default=None)
     args = parser.parse_args()
@@ -629,7 +873,7 @@ def main():
         f"SCRIPT: mssf_slim/summarize_results.py",
         f"COMMAND: {cmd_str}",
         "=" * 110,
-        "# Stage 5 (`mssf_slim`) Unified Evaluation Summary (Computed from `.npy`)\n",
+        "# `mssf_slim` Unified Evaluation Summary (Computed Directly from `.npy`)\n",
     ]
     sections = ["\n".join(header_lines)]
 
@@ -637,7 +881,7 @@ def main():
         for sp in args.splits:
             _sync_from_drive_if_available(args.results_dir, args.drive_dir, sp, only_methods=args.methods)
 
-    sections.append(format_architecture_and_params_section(args.results_dir))
+    sections.append(format_architecture_and_params_section(args.results_dir, only_methods=args.methods))
 
     collected_by_split: Dict[str, Dict[str, dict]] = {}
     for split_type in args.splits:
@@ -647,6 +891,7 @@ def main():
             only_folds=args.folds,
             only_methods=args.methods,
             drive_dir=args.drive_dir,
+            compute_conformal=not args.no_conformal,
         )
         collected_by_split[split_type] = collected
         sections.append(format_markdown_tables(collected, split_type))
@@ -654,6 +899,21 @@ def main():
     joint_sec = format_joint_selection_section(collected_by_split)
     if joint_sec:
         sections.append(joint_sec)
+
+    if args.baseline_results_dir or args.baseline_drive_dir:
+        b_local = args.baseline_results_dir or os.path.join(os.path.dirname(args.results_dir), 'results_v2_cache')
+        base_by_split: Dict[str, Dict[str, dict]] = {}
+        for split_type in args.splits:
+            base_by_split[split_type] = collect_method_results(
+                b_local,
+                split_type,
+                only_folds=args.folds,
+                only_methods=None,
+                drive_dir=args.baseline_drive_dir,
+                compute_conformal=False,
+            )
+        target_folds = sorted(args.folds) if args.folds else list(range(10))
+        sections.append(format_fold_matched_baseline_section(collected_by_split, base_by_split, target_folds))
 
     full_report = "\n".join(sections)
     print(full_report)
