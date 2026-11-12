@@ -490,12 +490,21 @@ def run_single_fold(
 
     if verbose:
         ord_aps = valsel_conformal['Ordinal_APS']
+        test_log_str = ""
+        if eval_test and test_metrics is not None:
+            t_ord_aps = conformal_res['Ordinal_APS']
+            test_log_str = (
+                f" | TEST MacroF1={test_metrics['MacroF1']:.4f}, QWK={test_metrics['QWK']:.4f}, "
+                f"MAE={test_metrics['MAE']:.4f}, Ord-APS Cov={t_ord_aps['empirical_coverage']:.3f}, "
+                f"Size={t_ord_aps['avg_set_size']:.2f}"
+            )
         print(
             f"  --> Fold {fold} Done ({elapsed:.1f}s | PeakGPU={peak_gpu_mb:.1f}MB | Params={total_params:,}) | "
             f"Best Epoch={best_epoch} | train(eval) MacroF1={best_train_macro_f1:.4f} | "
             f"valsel MacroF1={valsel_final['MacroF1']:.4f}, QWK={valsel_final['QWK']:.4f}, "
             f"MAE={valsel_final['MAE']:.4f} | Gap(tr-val)={train_valsel_gap:+.4f} | "
             f"valsel Ord-APS Cov={ord_aps['empirical_coverage']:.3f}, Size={ord_aps['avg_set_size']:.2f}"
+            f"{test_log_str}"
         )
 
     return fold_summary
@@ -523,6 +532,17 @@ def _is_valid_npy_file(path: str) -> bool:
     try:
         arr = np.load(path, allow_pickle=False)
         return arr.size > 0
+    except Exception:
+        return False
+
+
+def _is_valid_json_file(path: str) -> bool:
+    if not os.path.isfile(path) or os.path.getsize(path) == 0:
+        return False
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            obj = json.load(f)
+        return isinstance(obj, dict)
     except Exception:
         return False
 
@@ -572,6 +592,13 @@ def _try_restore_completed_fold(
                     if os.path.exists(local_p) and not _is_valid_npy_file(local_p):
                         print(f"  [CLEANUP] Removing corrupted local file: {local_p}")
                         os.remove(local_p)
+                elif fname.endswith('.json'):
+                    if os.path.exists(drive_p) and not _is_valid_json_file(drive_p):
+                        print(f"  [CLEANUP] Removing corrupted Drive JSON: {drive_p}")
+                        os.remove(drive_p)
+                    if os.path.exists(local_p) and not _is_valid_json_file(local_p):
+                        print(f"  [CLEANUP] Removing corrupted local JSON: {local_p}")
+                        os.remove(local_p)
                 if not os.path.exists(local_p) and os.path.exists(drive_p):
                     shutil.copy2(drive_p, local_p)
 
@@ -590,6 +617,7 @@ def _try_restore_completed_fold(
             and 'best_train_macro_f1' in summary_data
             and 'named_children_params' in summary_data
             and 'peak_gpu_mb' in summary_data
+            and (not eval_test or summary_data.get('test_metrics') is not None)
         ):
             return summary_data
     return None
@@ -607,7 +635,7 @@ def run_experiment(
     verbose: bool = True,
 ) -> dict:
     """
-    Run a Stage 5 experiment across the requested folds ('quick': [0], 'dev': [0,1,2], 'full': [0..9]),
+    Run a Stage 5/7 experiment across the requested folds ('quick': [0], 'dev': [0,1,2], 'full': [0..9]),
     aggregate classification, conformal, peak GPU memory, parameter counts, and learned EN-add weights,
     and save provenance files to `results_slim/`.
     """
@@ -623,7 +651,7 @@ def run_experiment(
         print(
             f"=== Running [mssf_slim] {exp_name} | Split {split_type} | Mode={mode} (folds={folds}) | "
             f"Device={device} | Epochs={cfg['epochs']} | SelfCorr={cfg.get('profile_self_correction', True)} | "
-            f"Resume={resume} ==="
+            f"eval_test={eval_test} | Resume={resume} ==="
         )
 
     fold_summaries = []
@@ -636,9 +664,12 @@ def run_experiment(
                 if verbose:
                     vm = cached['valsel_metrics']
                     pgpu = float(cached.get('peak_gpu_mb', 0.0))
+                    tm_str = ""
+                    if eval_test and cached.get('test_metrics') is not None:
+                        tm_str = f", TEST MacroF1={cached['test_metrics']['MacroF1']:.4f}"
                     print(
                         f"  [RESUME] Skipping {method_folder} Fold {fold} (already completed: "
-                        f"valsel MacroF1={vm['MacroF1']:.4f}, QWK={vm['QWK']:.4f}, PeakGPU={pgpu:.1f}MB)"
+                        f"valsel MacroF1={vm['MacroF1']:.4f}, QWK={vm['QWK']:.4f}{tm_str}, PeakGPU={pgpu:.1f}MB)"
                     )
                 fold_summaries.append(cached)
                 _sync_method_dir(method_dir, drive_dir, method_folder)
@@ -670,14 +701,21 @@ def run_experiment(
         test_mean, test_std = aggregate_fold_metrics(test_list)
         test_summary = {'mean': test_mean, 'std': test_std}
     else:
+        test_mean, test_std = None, None
         test_summary = None
 
     agg_conformal = {}
+    agg_test_conformal = {}
     for c4_method in ['LAC', 'APS', 'Ordinal_LAC', 'Ordinal_APS']:
         c_mean, c_std = aggregate_fold_metrics(
             [s.get('valsel_conformal', s['conformal'])[c4_method] for s in fold_summaries]
         )
         agg_conformal[c4_method] = {'mean': c_mean, 'std': c_std}
+        if eval_test and test_summary is not None:
+            tc_mean, tc_std = aggregate_fold_metrics(
+                [s['conformal'][c4_method] for s in fold_summaries]
+            )
+            agg_test_conformal[c4_method] = {'mean': tc_mean, 'std': tc_std}
 
     first_fold = fold_summaries[0] if fold_summaries else {}
     exp_summary = {
@@ -695,6 +733,7 @@ def run_experiment(
         'train_valsel_gap_summary': {'mean': gap_mean, 'std': gap_std},
         'test_summary': test_summary,
         'conformal_summary': agg_conformal,
+        'test_conformal_summary': agg_test_conformal if agg_test_conformal else None,
         'fold_summaries': fold_summaries,
     }
 
@@ -707,8 +746,18 @@ def run_experiment(
     _sync_method_dir(method_dir, drive_dir, method_folder)
 
     if verbose:
+        test_blk = ""
+        if test_mean is not None and test_std is not None:
+            test_blk = (
+                f"  TEST MacroF1      : {test_mean['MacroF1']:.4f} +/- {test_std['MacroF1']:.4f}\n"
+                f"  TEST WeightedF1   : {test_mean['WeightedF1']:.4f} +/- {test_std['WeightedF1']:.4f}\n"
+                f"  TEST Accuracy     : {test_mean['Accuracy']:.4f} +/- {test_std['Accuracy']:.4f}\n"
+                f"  TEST QWK          : {test_mean['QWK']:.4f} +/- {test_std['QWK']:.4f}\n"
+                f"  TEST MAE          : {test_mean['MAE']:.4f} +/- {test_std['MAE']:.4f}\n"
+            )
+        eval_tag = "val_select + ONE-SHOT TEST" if test_mean is not None else "val_select"
         print(
-            f"=== Summary [mssf_slim] {exp_name} (Split {split_type}, {len(folds)} folds, val_select) ===\n"
+            f"=== Summary [mssf_slim] {exp_name} (Split {split_type}, {len(folds)} folds, {eval_tag}) ===\n"
             f"  Total Params      : {first_fold.get('total_params', 0):,}\n"
             f"  Peak GPU (MB)     : {peak_gpu_mean:.1f} (max={peak_gpu_max:.1f})\n"
             f"  valsel MacroF1    : {valsel_mean['MacroF1']:.4f} +/- {valsel_std['MacroF1']:.4f}\n"
@@ -717,6 +766,7 @@ def run_experiment(
             f"  valsel QWK        : {valsel_mean['QWK']:.4f} +/- {valsel_std['QWK']:.4f}\n"
             f"  valsel MAE        : {valsel_mean['MAE']:.4f} +/- {valsel_std['MAE']:.4f}\n"
             f"  Gap (train-valsel): {gap_mean:+.4f} +/- {gap_std:.4f}\n"
+            f"{test_blk}"
             f"  Saved to          : {summary_path}"
         )
 
